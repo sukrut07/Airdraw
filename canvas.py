@@ -645,10 +645,9 @@ def main():
 
 
 if __name__ == '__main__':
-    # replay("./hands_basic_gestures.mp4")
-    # replay("./buttons_overlap.mp4")
-    # replay("./translation_debug.mp4")
-    replay("./hands_drawing_ui.mp4")
-    # replay("./eraser_debug.mp4")
-
-    # main()
+    import sys
+    import os
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        replay(sys.argv[1])
+    else:
+        main()
