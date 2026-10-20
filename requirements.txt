@@ -1,0 +1,9 @@
+# Core Computer Vision & ML dependencies
+opencv-python>=4.5.4.58
+mediapipe>=0.8.9
+numpy>=1.21.4
+
+# Image processing & visualization
+Pillow>=8.4.0
+matplotlib>=3.4.3
+protobuf>=3.19.1
