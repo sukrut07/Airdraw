@@ -1,4 +1,4 @@
-# 🎨 AirDraw: Gesture-Controlled Virtual Canvas
+# 🎨 AirDraw: Real-Time Hand Gesture Virtual Canvas
 
 <div align="center">
 
@@ -9,62 +9,67 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-brightgreen?style=for-the-badge)](https://github.com/sukrut07/Airdraw)
 
 <p align="center">
-  <b>Draw, erase, hover, and manipulate shapes directly in the air using your webcam, computer vision, and real-time hand-tracking.</b>
+  <b>A touchless, computer-vision-powered air canvas. Draw, hover, erase, and manipulate geometric primitives in real time using webcam hand-tracking and vector mathematics.</b>
 </p>
 
 </div>
 
 ---
 
-## 📽️ Demo Showcase
+## 📖 Overview
 
-Real-time air canvas interaction with zero physical markers or styluses needed:
+**AirDraw** transforms your standard computer webcam into an interactive gesture-controlled drawing canvas. By pairing **Google MediaPipe's** 21 3D hand landmark model with **OpenCV** and classical linear algebra, AirDraw accurately interprets hand gestures without requiring physical markers, styluses, or wearable hardware.
 
-<div align="center">
-  <img src="./demo_gifs/demo.gif" alt="Full AirDraw Demo" width="85%" style="border-radius: 10px; box-shadow: 0px 4px 15px rgba(0,0,0,0.2);" />
-  <p><i>Full feature demonstration: Freehand Drawing, Hover Selection, Erasing, and Shape Translation.</i></p>
-</div>
+### 🌟 Core Highlights
 
----
-
-## ✨ Features
-
-- 🖐️ **21 3D Hand Landmark Tracking**: Powered by Google MediaPipe for high-precision real-time hand skeletal tracking.
-- 📐 **Vector-Based Gesture Classification**: Clean geometric angle and dot product heuristics to classify hand gestures without heavyweight neural models.
-- 🖌️ **Multiple Primitives**: Switch seamlessly between **Freehand Lines**, **Circles**, and **Squares**.
-- 🎨 **Dynamic Color Palette**: Select between vibrant colors (Blue, Green, Red, Yellow, Purple) on the floating interactive HUD.
-- 🧽 **Proximity-Based Eraser**: Make a fist to wipe out strokes and shapes within your hand's radius.
-- ✋ **Shape Translation**: Grab and drag existing drawings and shapes across the screen with an open hand gesture.
-- 🌌 **Background Switcher**: Switch on the fly between live webcam passthrough and a minimalist solid black blackboard.
-- 📈 **Jitter Reduction**: Ring-buffer smoothing to average landmarks across frames for clean, steady lines.
+- 🖐️ **Zero-Hardware Touchless Input**: Operates on any standard webcam at real-time frame rates.
+- 📐 **Vector-Based Gesture Engine**: Classifies gestures via high-speed trigonometric angles and dot products instead of slow neural inference.
+- 🖌️ **Multiple Geometric Primitives**: Freehand drawing, smooth circles, and axis-aligned squares.
+- 🎨 **Floating Virtual HUD**: Interactive on-screen buttons for color picking and shape toggling.
+- 🧼 **Spatial Collision Eraser**: Proximity-based collision detection wipes drawings within a customizable radius.
+- ✋ **Interactive Translation**: Grab and drag drawn objects across the canvas using open-palm tracking.
+- 🌌 **Dual Canvas Modes**: Instant toggle between real-time camera passthrough and a clean blackout blackboard.
+- 📈 **Temporal RingBuffer Smoothing**: Multi-frame landmark averaging eliminates micro-jitter and delivers smooth strokes.
 
 ---
 
-## 🖐️ Gesture & Control Guide
+## 🖐️ Gesture & Control System
 
-| Gesture | Visual Pose | Action Mode | Description |
+AirDraw uses hand landmark geometry to dynamically determine current interaction mode:
+
+| Mode | Hand Pose | Trigger Condition | Functionality |
 | :--- | :--- | :--- | :--- |
-| **Drawing** | ☝️ **Index finger up** | `DRAW` | Draws the active primitive (freehand stroke, circle, or rectangle) |
-| **Hovering** | ✌️ **Index + Middle finger up** | `HOVER` | Cursor moves passively across HUD to select colors, shapes, or hit **Clear All** |
-| **Erasing** | ✊ **Closed fist** | `ERASE` | Removes any stroke, circle, or square that intersects the eraser circle |
-| **Translating**| 🖐️ **All 5 fingers extended** | `TRANSLATE` | Grabs existing drawings and moves them across the 2D plane |
+| **`DRAW`** | ☝️ **Index finger up** | Index extended, others curled | Draws the active primitive (freehand stroke, circle, or rectangle) |
+| **`HOVER`** | ✌️ **Index + Middle fingers up** | Index and middle extended | Moves cursor passively across the HUD to select colors, shapes, or hit **Clear All** |
+| **`ERASE`** | ✊ **Closed fist** | All fingers closed into palm | Erases any stroke, circle, or square intersecting the eraser contact zone |
+| **`TRANSLATE`** | 🖐️ **Full open palm** | All 5 fingers extended | Calculates hand displacement and moves existing drawings across the screen |
 
 ### 🎛️ Keyboard Shortcuts
 
-| Key | Function |
+| Shortcut | Description |
 | :--- | :--- |
 | <kbd>b</kbd> | Toggle canvas background between **Live Camera Stream** and **Blackout Canvas** |
-| <kbd>q</kbd> or <kbd>ESC</kbd> | Safely exit AirDraw and close all windows |
+| <kbd>q</kbd> or <kbd>ESC</kbd> | Safely terminate the application loop and close OpenCV windows |
 
 ---
 
-## 📸 Gesture Visuals
+## 🧠 System Architecture & Pipeline
 
-| ✏️ Freehand Drawing | 👆 Passive Hover & Navigation |
-| :---: | :---: |
-| ![Drawing](./demo_gifs/drawing.gif) | ![Hovering](./demo_gifs/hovering.gif) |
-| **🧼 Proximity Erasing** | **✋ Shape Translation** |
-| ![Erasing](./demo_gifs/erasing.gif) | ![Translating](./demo_gifs/translating.gif) |
+```mermaid
+flowchart LR
+    A[Webcam Feed] --> B[Horizontal Flip]
+    B --> C[MediaPipe Hands Solution]
+    C --> D[21 Landmark Extraction]
+    D --> E[RingBuffer Temporal Filter]
+    E --> F[Vector Math & Dot Products]
+    F --> G{Gesture Classifier}
+    G -->|Index Only| H[DRAW Mode]
+    G -->|Index + Middle| I[HOVER Mode / HUD]
+    G -->|Closed Fist| J[ERASE Mode]
+    G -->|Open Palm| K[TRANSLATE Mode]
+    H & I & J & K --> L[Canvas Compositor]
+    L --> M[Interactive Display Window]
+```
 
 ---
 
@@ -72,93 +77,101 @@ Real-time air canvas interaction with zero physical markers or styluses needed:
 
 ### 📋 Prerequisites
 
-- **Python 3.8 – 3.11** (Python 3.10 or 3.11 is strongly recommended for MediaPipe compatibility on modern systems, including Apple Silicon).
-- A working webcam.
+- **Python 3.8 to 3.11** *(Python 3.10 / 3.11 recommended for MediaPipe)*
+- A functional webcam
 
-### ⚙️ Quick Installation
+### ⚡ Quick Start (Automated Launcher)
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/sukrut07/Airdraw.git
-   cd Airdraw
-   ```
+The repository includes a self-configuring shell script that detects the best Python version, sets up a virtual environment, checks dependencies, and launches AirDraw:
 
-2. **Create and activate a virtual environment:**
-   - **macOS / Linux:**
-     ```bash
-     python3.11 -m venv venv
-     source venv/bin/activate
-     ```
-     *(If using default Python: `python3 -m venv venv && source venv/bin/activate`)*
-
-   - **Windows (Command Prompt / PowerShell):**
-     ```cmd
-     python -m venv venv
-     .\venv\Scripts\activate
-     ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
+```bash
+./run.sh
+```
 
 ---
 
-## 🎮 Running AirDraw
+### 🛠️ Manual Installation & Execution
 
-Launch the interactive air drawing application:
+#### 🍎 macOS & 🐧 Linux
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/sukrut07/Airdraw.git
+cd Airdraw
+
+# 2. Create and activate a virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# 3. Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Launch AirDraw
 python airdraw.py
 ```
 
-### 📹 Recording & Replaying Gestures
+#### 🪟 Windows (PowerShell / Command Prompt)
 
-You can also record raw webcam sessions or replay captured sessions for testing:
+```powershell
+# 1. Create and activate a virtual environment
+python -m venv venv
+.\venv\Scripts\activate
 
-- **Record a test video:**
-  ```bash
-  python data.py -m record -f sample.mp4
-  ```
-- **Replay a recorded video:**
-  ```bash
-  python data.py -m replay -f sample.mp4
-  ```
+# 2. Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 3. Launch AirDraw
+python airdraw.py
+```
 
 ---
 
-## 📂 Project Architecture
+## 📐 Mathematical Formulation
+
+### 1. Angular Gesture Detection
+Fingers are evaluated using the cosine of the angle $\theta$ between the palm-to-MCP vector $\vec{u}$ and the MCP-to-TIP vector $\vec{v}$:
+
+$$\cos(\theta) = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\| \|\vec{v}\|}$$
+
+When $\cos(\theta) \ge \tau$ (where threshold $\tau \approx 0.70$), the finger is classified as extended; otherwise, it is recognized as folded.
+
+### 2. Jitter Reduction with RingBuffer
+To prevent frame-to-frame trembling, landmark coordinates are smoothed across a sliding temporal window of size $N=5$:
+
+$$\bar{P}_i = \frac{1}{N} \sum_{k=1}^{N} P_{i,k}$$
+
+where $P_{i,k}$ represents the 3D position of landmark $i$ at frame $k$.
+
+---
+
+## 📂 Repository Structure
 
 ```
 Airdraw/
 ├── airdraw.py          # Main application loop, camera capture & event dispatcher
-├── canvas.py           # Canvas state manager, shapes, HUD buttons & rendering logic
+├── canvas.py           # Virtual canvas state manager, HUD buttons & rendering logic
 ├── hands.py            # MediaPipe wrapper, LandmarkBuffer & gesture recognition
-├── util.py             # Geometric algorithms, dot products, and vector mathematics
-├── data.py             # Video collection and playback utility for debugging
+├── util.py             # Geometric math, dot products, and vector operations
+├── data.py             # Dataset capture and replay utility
+├── run.sh              # One-command automated execution script
 ├── requirements.txt    # Project dependencies
+├── HOW_TO_RUN.md       # Terminal guide for running on macOS, Linux, and Windows
 ├── LICENSE.md          # Mozilla Public License 2.0
-├── README.md           # Project documentation and guides
-└── demo_gifs/          # Animated demonstration recordings
-    ├── demo.gif
-    ├── drawing.gif
-    ├── hovering.gif
-    ├── erasing.gif
-    ├── translating.gif
-    └── dotproduct.gif
+└── README.md           # Project documentation
 ```
 
 ---
 
 ## 💡 Troubleshooting
 
-- **Webcam permission denied on macOS:** Ensure your terminal (Terminal, iTerm2, or VS Code) has camera access in **System Settings > Privacy & Security > Camera**.
-- **MediaPipe installation error:** MediaPipe currently provides official wheels up to Python 3.11. If your default `python3` is 3.12 or 3.14, create the virtual environment using `python3.11 -m venv venv`.
-- **Low FPS:** Ensure adequate room lighting for faster camera exposure times and optimal MediaPipe landmark inference.
+- **Webcam permission denied (macOS)**: Ensure your terminal emulator has camera permissions under **System Settings > Privacy & Security > Camera**.
+- **MediaPipe installation**: If using Python 3.12 or newer, use `python3.11 -m venv venv` to create the environment with official wheel support.
+- **Lighting and Detection**: Ambient lighting improves hand landmark contrast and minimizes latency.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [Mozilla Public License 2.0](LICENSE.md).
+Distributed under the [Mozilla Public License 2.0](LICENSE.md).
