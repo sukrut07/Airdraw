@@ -63,12 +63,13 @@ class HandDetector():
         self.max_hands = max_hands
         self.mode = mode
         # hand drawing stuff
-        self.hands = mp.solutions.hands.Hands(self.mode, self.max_hands)
+        self.hands = mp.solutions.hands.Hands(static_image_mode=self.mode, max_num_hands=self.max_hands)
         self.drawing = mp.solutions.drawing_utils
         self.hand_connections = mp.solutions.hands.HAND_CONNECTIONS
         # will be used for translation
         self.translation_buffer = LandmarkBuffer(5)
         # we have 0 velocity to start translation
+        self.results = None
 
     def detect_landmarks(self, frame):
         """
@@ -96,9 +97,9 @@ class HandDetector():
         """
         Draws hand landmarks on image. Breaks rules of class being only "img"->hand current state, but I think this looks the best so I'm keeping it this way.
         """
-        if self.results.multi_hand_landmarks:
-           for hand_landmark in self.results.multi_hand_landmarks:
-               self.drawing.draw_landmarks(img, hand_landmark, mp.solutions.hands.HAND_CONNECTIONS)
+        if getattr(self, 'results', None) and self.results.multi_hand_landmarks:
+            for hand_landmark in self.results.multi_hand_landmarks:
+                self.drawing.draw_landmarks(img, hand_landmark, mp.solutions.hands.HAND_CONNECTIONS)
 
    
     def detect_gesture(self, landmarks, threshhold=0.70, debug=False):
@@ -313,4 +314,10 @@ def live_demo():
 
 
 if __name__ == "__main__":
-    replay('hands_basic_gestures.mp4')
+    import sys
+    import os
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        replay(sys.argv[1])
+    else:
+        print("Starting live hand tracking demo (press 'q' to quit)...")
+        live_demo()
