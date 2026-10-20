@@ -5,6 +5,14 @@ from enum import Enum
 from collections import deque
 
 from util import xy_euclidean_dist, vectorize, cos_angle
+
+if not hasattr(mp, 'solutions'):
+    raise ImportError(
+        "MediaPipe 'solutions' module was not found. "
+        "MediaPipe >= 0.10.15 / 1.x removed the legacy solutions API. "
+        "Please install the compatible version: pip install 'mediapipe<=0.10.14'"
+    )
+
 class Gesture(Enum):
     DRAW = 'DRAW'
     HOVER = 'HOVER'
