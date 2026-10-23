@@ -12,7 +12,7 @@ def replay(fname):
     frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    canvas = Canvas(frame_width, frame_height)
+    canvas = Canvas(height=frame_height, width=frame_width)
 
     if (not cap.isOpened()):
         print("Error opening video file")
@@ -52,7 +52,7 @@ def main():
     height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) + 0.5)
 
     # initialize the canvas element and hand-detector program
-    canvas = Canvas(height, width)
+    canvas = Canvas(height=height, width=width)
     detector = HandDetector()
     print(f"Airdraw initialized ({width}x{height})")
     print("Controls: Press 'b' to toggle camera/black background, 'q' or ESC to quit")

@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 
 from hands import Gesture, HandDetector
-from util import xy_euclidean_dist
+from util import xy_euclidean_dist, clamp
 
 from enum import Enum
 
@@ -38,20 +38,28 @@ class Canvas():
 
     This component is intended to take (frame, hands_state) -> (update state) -> image to render
     """
-    def __init__(self, rows, columns):
-        # FIXME: just make this deterministic via list
+    def __init__(self, height=480, width=640, rows=None, columns=None):
+        # Support both (height, width) and legacy (rows, columns)
+        if rows is not None:
+            height = rows
+        if columns is not None:
+            width = columns
+
+        self.height = height
+        self.width = width
+        self.rows = height
+        self.columns = width
+
         self.colors = [ Color.BLUE, Color.GREEN, Color.RED ]
         self.shapes = [ Shape.LINE, Shape.CIRCLE, Shape.SQUARE ]
-        self.rows = rows
-        self.columns = columns
         self.color = Color.BLUE # only really used to initialize lines
         self.shape = Shape.LINE
-        self.lines = {} # whole list of points
-        self.circles = [] # whole list of points
-        self.squares = [] # whole list of squares
-        self.currLine = Line(None, self.color)# this is the line we're adding to 
+        self.lines = {} # map of origin -> Line
+        self.circles = [] # list of Circle objects
+        self.squares = [] # list of Square objects
+        self.currLine = Line(self.color, None) # this is the line we're adding to 
         self.currLine.active = False
-        self.currCircle = Circle((-1, -1), -1, self.color)# this is the line we're adding to 
+        self.currCircle = Circle((-1, -1), -1, self.color)
         self.currCircle.active = False
         self.currSquare = Square((-1, -1), (-1, -1), self.color)
         self.currSquare.active = False
@@ -440,12 +448,7 @@ class Canvas():
             # Check if transformation is valid
             if len(translation) == len(line.points):
                 self.lines.pop(og_point)
-
                 line.points = translation
-                new_origin = line.get_origin()
-                assert(og_point != new_origin)
-
-                # put the value back in the lines
                 self.lines[line.get_origin()] = line
         
         for i, circle in enumerate(self.circles):                
@@ -502,13 +505,13 @@ class Line():
     Helper class to represent the lines put on the screen
     """
 
-    def __init__(self, color: Color, origin):
+    def __init__(self, color: Color, origin=None):
         self.color = color
-        self.points = [origin]
+        self.points = [origin] if origin is not None else []
         self.active = True
 
     def get_origin(self):
-        return self.points[0]
+        return self.points[0] if self.points else None
 
     def __repr__(self):
         return f"\ncolor({self.color}) \
@@ -559,43 +562,20 @@ class Square():
 
     def overlaps_circle(self, point, radius) -> bool:
         """
-        Returns true if the border of our square overlaps with the circle.
-        Args
+        Returns true if the square (boundary or interior) overlaps with the circle.
+        Args:
             point: (row, col) of the query point
-        
-        Math here - https://stackoverflow.com/a/402010
+            radius: radius of circle
         """
         point_r, point_c = point
-
         topRow, leftCol, bottomRow, rightCol = self.get_coords()
-        square_center_row = (topRow + bottomRow) // 2
-        square_center_col = (leftCol + rightCol) // 2
 
-        point_dist_r = abs(point_r - square_center_row) # compare against height
-        point_dist_c = abs(point_c - square_center_col) # compare against width
-        half_height = self.get_height() // 2
-        half_width = self.get_width() // 2
-        square_border_row_dist = abs(point_dist_r - half_height)
-        square_border_col_dist = abs(point_dist_c - half_width)
+        # Find closest point on rectangle to circle center
+        closest_r = clamp(point_r, topRow, bottomRow)
+        closest_c = clamp(point_c, leftCol, rightCol)
 
-        # Too far from the rectangle
-        if (point_dist_r > (half_height + radius)): return False
-        if (point_dist_c > (half_width + radius)): return False
-
-        # Too close to the origin
-        if (point_dist_r < (half_height - radius) and point_dist_c < (half_width - radius)): return False
-
-        # If this code does what I think, it means that 
-        # the row is in [half_height - radius, half_height + radius] 
-        # the col is in [half_width - radius, half_width + radius]
-        assert(half_width - radius <= point_dist_c <= half_width + radius or half_height - radius <= point_dist_r <= half_height + radius)
-
-        # Point is within 
-        if (point_dist_r > half_width and point_dist_c > half_height):
-            cornerDist = (square_border_col_dist) ** 2 + (square_border_row_dist) ** 2
-            return cornerDist <= radius**2
-        
-        return True
+        dist_sq = (point_r - closest_r) ** 2 + (point_c - closest_c) ** 2
+        return dist_sq <= (radius ** 2)
 
     def __repr__(self):
         topRow, leftCol, bottomRow, rightCol = self.get_coords()
