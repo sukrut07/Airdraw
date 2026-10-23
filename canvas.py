@@ -284,6 +284,11 @@ class Canvas:
             frame = np.zeros_like(frame)
 
         frame_height, frame_width = frame.shape[:2]
+
+        # Render artwork first so the toolbar remains readable above it.
+        frame = self.draw_lines(frame)
+        frame = self.draw_circles(frame)
+        frame = self.draw_squares(frame)
         buttons_coord = self.get_buttons_coords(frame.shape)
         toolbar_bottom = min(frame_height - 1, max(38, min(72, int(frame_height * 0.13))))
         toolbar_overlay = frame.copy()
@@ -314,9 +319,8 @@ class Canvas:
                     cv.rectangle(frame, (x1 + 1, y1 + 1), (x2 - 1, y2 - 1), (0, 220, 255), 2)
             else:
                 text_color = (100, 100, 255)
-                selected = False
 
-            label = "CLEAR" if button_name == "CLEAR" else button_name
+            label = "RECT" if button_name == "SQUARE" else button_name
             max_text_width = max(8, x2 - x1 - 8)
             font_scale = 0.40
             while font_scale > 0.22:
@@ -334,12 +338,6 @@ class Canvas:
                 progress = min(1.0, self.clear_dwell_frames / self.clear_dwell_threshold)
                 fill_width = int((x2 - x1) * progress)
                 cv.rectangle(frame, (x1, y2 - 4), (x1 + fill_width, y2), (0, 0, 255), -1)
-
-        # Draw drawing primitives
-        # Draw drawing primitives
-        frame = self.draw_lines(frame)
-        frame = self.draw_circles(frame)
-        frame = self.draw_squares(frame)
 
         tracking = data.get('tracking', False) if data else False
         gesture = data.get('gesture') if data else Gesture.NONE
