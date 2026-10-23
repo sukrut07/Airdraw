@@ -229,3 +229,46 @@ def export_png(canvas: Any, filepath: str, transparent: bool = False, background
     except Exception as e:
         print(f"Error exporting image to {filepath}: {e}")
         return False
+
+
+DEFAULT_CONFIG_PATH = "projects/.airdraw_config.json"
+
+
+def load_app_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict[str, Any]:
+    """Loads application configuration, returning defaults if not found."""
+    if not os.path.exists(config_path):
+        return {"has_completed_onboarding": False}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception as e:
+        print(f"Warning: could not load config from {config_path}: {e}")
+    return {"has_completed_onboarding": False}
+
+
+def save_app_config(config: Dict[str, Any], config_path: str = DEFAULT_CONFIG_PATH) -> bool:
+    """Saves application configuration to JSON."""
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(config_path)), exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Warning: could not save config to {config_path}: {e}")
+        return False
+
+
+def has_completed_onboarding(config_path: str = DEFAULT_CONFIG_PATH) -> bool:
+    """Checks if the user has completed or skipped onboarding previously."""
+    cfg = load_app_config(config_path)
+    return bool(cfg.get("has_completed_onboarding", False))
+
+
+def set_onboarding_completed(completed: bool = True, config_path: str = DEFAULT_CONFIG_PATH) -> bool:
+    """Persists onboarding completion/skip preference."""
+    cfg = load_app_config(config_path)
+    cfg["has_completed_onboarding"] = completed
+    return save_app_config(cfg, config_path)
+
