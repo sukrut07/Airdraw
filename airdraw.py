@@ -1,119 +1,152 @@
+"""AirDraw's webcam loop, keyboard shortcuts, and drawing export actions."""
+
 import os
 from datetime import datetime
-import numpy as np
+
 import cv2 as cv
-from hands import HandDetector
+
 from canvas import Canvas
-from persistence import save_project, export_png
+from hands import HandDetector
+from persistence import export_png, save_project
 
 
-def replay(fname):
-    print("replaying", fname)
+def _timestamp() -> str:
+    """Return a filesystem-friendly timestamp that avoids same-second collisions."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
-    cap = cv.VideoCapture(fname)
-    # Use whatever width and height possible
-    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    canvas = Canvas(height=frame_height, width=frame_width)
+def save_snapshot(canvas: Canvas) -> None:
+    """Save an editable project and a clean PNG, reporting partial failures honestly."""
+    timestamp = _timestamp()
+    project_path = f"projects/airdraw_{timestamp}.json"
+    image_path = f"exports/airdraw_{timestamp}.png"
 
-    if (not cap.isOpened()):
-        print("Error opening video file")
+    project_saved = save_project(canvas, project_path)
+    image_exported = export_png(canvas, image_path, transparent=False)
+
+    if project_saved and image_exported:
+        canvas.set_status(f"Saved project + {os.path.basename(image_path)}")
+    elif project_saved:
+        canvas.set_status("Project saved; PNG export failed")
+    elif image_exported:
+        canvas.set_status("PNG exported; project save failed")
+    else:
+        canvas.set_status("Save failed - check terminal output")
+
+
+def export_transparent_snapshot(canvas: Canvas) -> None:
+    """Export artwork only with transparent pixels outside the drawing."""
+    image_path = f"exports/airdraw_trans_{_timestamp()}.png"
+    if export_png(canvas, image_path, transparent=True):
+        canvas.set_status(f"Transparent PNG exported: {os.path.basename(image_path)}")
+    else:
+        canvas.set_status("Transparent PNG export failed - check terminal output")
+
+
+def handle_keypress(key: int, canvas: Canvas) -> bool:
+    """Handle one OpenCV key code. Return False when the app should quit."""
+    if key in (ord("h"), ord("?")):
+        canvas.toggle_help()
+    elif key == 27 and canvas.show_help:
+        canvas.show_help = False
+    elif key in (ord("q"), 27):
+        return False
+    elif key == ord("b"):
+        canvas.switch_background()
+        background = "Dark whiteboard" if canvas.blackout_background else "Camera background"
+        canvas.set_status(background)
+    elif key in (ord("z"), 26):
+        canvas.undo()
+    elif key in (ord("y"), 25):
+        canvas.redo()
+    elif key == ord("["):
+        canvas.set_brush_size(canvas.brush_size - 2)
+    elif key == ord("]"):
+        canvas.set_brush_size(canvas.brush_size + 2)
+    elif key in (ord("s"), 19):
+        save_snapshot(canvas)
+    elif key == ord("e"):
+        export_transparent_snapshot(canvas)
+
+    return True
+
+
+def replay(filename: str) -> None:
+    """Replay a video through the hand-tracking canvas until it ends or Q is pressed."""
+    capture = cv.VideoCapture(filename)
+    if not capture.isOpened():
+        capture.release()
+        print(f"Error: could not open video file: {filename}")
         return
 
-    detector = HandDetector()
+    detector = None
+    canvas = None
     try:
-        while cap.isOpened() and (cv.waitKey(0) & 0xFF != ord('q')):
-            ret, img = cap.read()
-            if ret:
-                gesture_metadata = detector.get_gesture_metadata(img)
-                img = canvas.update_and_draw(img, gesture_metadata)
-                detector.draw_landmarks(img)
-                cv.imshow('Camera', img)
-            else:
+        detector = HandDetector()
+        while True:
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                break
+
+            if canvas is None:
+                height, width = frame.shape[:2]
+                canvas = Canvas(height=height, width=width)
+
+            metadata = detector.get_gesture_metadata(frame)
+            frame = canvas.update_and_draw(frame, metadata)
+            detector.draw_landmarks(frame)
+            cv.imshow("AirDraw - Replay", frame)
+
+            if cv.waitKey(30) & 0xFF in (ord("q"), 27):
                 break
     finally:
-        cap.release()
-        detector.close()
+        capture.release()
+        if detector is not None:
+            detector.close()
         cv.destroyAllWindows()
 
-    print("replay complete", fname)
+    print(f"Replay finished: {filename}")
 
-def main():
-    # Loading the default webcam of PC.
-    cap = cv.VideoCapture(0)
-    
-    if not cap.isOpened():
-        print("Error: Could not open webcam (index 0). Please check camera permissions and connections.")
+
+def main() -> None:
+    """Run AirDraw with the default webcam and always release acquired resources."""
+    capture = cv.VideoCapture(0)
+    if not capture.isOpened():
+        capture.release()
+        print("Error: could not open webcam. Check the connection and camera permissions.")
         return
 
-    # width and height for 2-D grid
-    width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH) + 0.5)
-    height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) + 0.5)
-
-    # initialize the canvas element and hand-detector program
-    canvas = Canvas(height=height, width=width)
-    detector = HandDetector()
-    print(f"AirDraw initialized ({width}x{height})")
-    print("Controls:")
-    print("  [h / ?] Toggle interactive help & gesture guide")
-    print("  [b] Toggle camera / whiteboard background")
-    print("  [z / Ctrl+Z] Undo")
-    print("  [y / Ctrl+Y] Redo")
-    print("  [ [ / ] ] Decrease / Increase brush size")
-    print("  [s / Ctrl+S] Save project & Export clean PNG")
-    print("  [e] Export Transparent PNG")
-    print("  [q / ESC] Quit")
-    
+    detector = None
+    canvas = None
     try:
+        detector = HandDetector()
         while True:
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                print("Warning: Failed to read frame from webcam.")
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                print("Warning: failed to read a frame from the webcam.")
                 break
 
             frame = cv.flip(frame, 1)
+            if canvas is None:
+                height, width = frame.shape[:2]
+                canvas = Canvas(height=height, width=width)
+                print(f"AirDraw ready ({width} x {height})")
+                print("Raise your index finger to select tools. Press H for gestures and shortcuts.")
 
-            gesture_metadata = detector.get_gesture_metadata(frame)
-
-            frame = canvas.update_and_draw(frame, gesture_metadata)
+            metadata = detector.get_gesture_metadata(frame)
+            frame = canvas.update_and_draw(frame, metadata)
             detector.draw_landmarks(frame)
-           
-            cv.imshow("Airdraw", frame)
-        
-            stroke = cv.waitKey(1) & 0xff  
-            if stroke == ord('h') or stroke == ord('?'): # press 'h' or '?' to toggle help overlay
-                canvas.toggle_help()
-            elif stroke == 27 and canvas.show_help: # 'esc' closes help if open
-                canvas.show_help = False
-            elif stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
-                canvas.switch_background()
-            elif stroke == ord('z') or stroke == 26: # 'z' or Ctrl+Z: Undo
-                canvas.undo()
-            elif stroke == ord('y') or stroke == 25: # 'y' or Ctrl+Y: Redo
-                canvas.redo()
-            elif stroke == ord('['): # '[': Decrease brush size
-                canvas.set_brush_size(canvas.brush_size - 2)
-            elif stroke == ord(']'): # ']': Increase brush size
-                canvas.set_brush_size(canvas.brush_size + 2)
-            elif stroke == ord('s') or stroke == 19: # 's' or Ctrl+S: Save & Export PNG
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                proj_file = f"projects/airdraw_{ts}.json"
-                png_file = f"exports/airdraw_{ts}.png"
-                save_project(canvas, proj_file)
-                export_png(canvas, png_file, transparent=False)
-                canvas.set_status(f"Saved: {os.path.basename(png_file)}")
-            elif stroke == ord('e'): # 'e': Export Transparent PNG
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                png_file = f"exports/airdraw_trans_{ts}.png"
-                export_png(canvas, png_file, transparent=True)
-                canvas.set_status(f"Exported: {os.path.basename(png_file)}")
-            elif stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
+            cv.imshow("AirDraw", frame)
+
+            key = cv.waitKey(1) & 0xFF
+            if not handle_keypress(key, canvas):
                 break
     finally:
-        cap.release()
-        detector.close()
+        capture.release()
+        if detector is not None:
+            detector.close()
         cv.destroyAllWindows()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
