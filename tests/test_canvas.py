@@ -199,3 +199,70 @@ def test_missing_tracking_safety():
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     rendered = canvas.draw_canvas(frame, lost_data)
     assert rendered is not None
+
+
+def test_canvas_undo_redo_integration():
+    canvas = Canvas(height=480, width=640)
+
+    # Draw a line
+    canvas.push_point((100, 100))
+    canvas.push_point((110, 110))
+    canvas.end_drawing()
+    assert len(canvas.lines) == 1
+    assert canvas.can_undo is True
+
+    # Undo removes the line
+    assert canvas.undo() is True
+    assert len(canvas.lines) == 0
+    assert canvas.can_redo is True
+
+    # Redo restores the line
+    assert canvas.redo() is True
+    assert len(canvas.lines) == 1
+
+
+def test_canvas_clear_undo():
+    canvas = Canvas(height=480, width=640)
+    canvas.push_point((100, 100))
+    canvas.push_point((110, 110))
+    canvas.end_drawing()
+
+    circle = Circle((200, 200), 20, Color.RED)
+    canvas.circles.append(circle)
+
+    coords = canvas.get_buttons_coords((480, 640, 3))
+    clear_btn = coords[0]
+    btn_r = (clear_btn[2][1] + clear_btn[3][1]) // 2
+    btn_c = (clear_btn[2][0] + clear_btn[3][0]) // 2
+
+    hover_data = {
+        'tracking': True,
+        'gesture': Gesture.HOVER,
+        'idx_fing_tip': (btn_r, btn_c),
+        'origin': (btn_r, btn_c)
+    }
+
+    # Dwell to clear
+    for _ in range(25):
+        canvas.update_state((480, 640, 3), hover_data)
+
+    assert len(canvas.lines) == 0
+    assert len(canvas.circles) == 0
+
+    # Undo the clear operation!
+    assert canvas.undo() is True
+    assert len(canvas.lines) == 1
+    assert len(canvas.circles) == 1
+
+
+def test_canvas_brush_size():
+    canvas = Canvas(height=480, width=640)
+    canvas.set_brush_size(14)
+    assert canvas.brush_size == 14
+
+    canvas.push_point((50, 50))
+    canvas.push_point((60, 60))
+    canvas.end_drawing()
+
+    line = list(canvas.lines.values())[0] if isinstance(canvas.lines, dict) else canvas.lines[0]
+    assert line.thickness == 14

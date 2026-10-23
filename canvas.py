@@ -5,6 +5,14 @@ from hands import Gesture, HandDetector
 from util import xy_euclidean_dist, clamp
 
 from enum import Enum
+from history import (
+    DrawingHistory,
+    AddLineCommand,
+    AddCircleCommand,
+    AddSquareCommand,
+    EraseCommand,
+    ClearCanvasCommand,
+)
 
 # FIXME: 
 # use a good spatial query system (is just iterating over literally every point the best we can do?) 
@@ -57,11 +65,13 @@ class Canvas():
         self.lines = {} # map of origin -> Line
         self.circles = [] # list of Circle objects
         self.squares = [] # list of Square objects
-        self.currLine = Line(self.color, None) # this is the line we're adding to 
+        self.brush_size = 5
+        self.history = DrawingHistory()
+        self.currLine = Line(self.color, None, thickness=self.brush_size) # this is the line we're adding to 
         self.currLine.active = False
-        self.currCircle = Circle((-1, -1), -1, self.color)
+        self.currCircle = Circle((-1, -1), -1, self.color, thickness=self.brush_size)
         self.currCircle.active = False
-        self.currSquare = Square((-1, -1), (-1, -1), self.color)
+        self.currSquare = Square((-1, -1), (-1, -1), self.color, thickness=self.brush_size)
         self.currSquare.active = False
         self.blackout_background = False
         self.clear_dwell_frames = 0
@@ -69,6 +79,36 @@ class Canvas():
         self.clear_hovering = False
         self.status_message = ""
         self.status_message_frames = 0
+
+    def undo(self) -> bool:
+        """Undoes the last completed drawing or canvas action."""
+        success = self.history.undo(self)
+        if success:
+            self.set_status("Undo")
+        else:
+            self.set_status("Nothing to undo")
+        return success
+
+    def redo(self) -> bool:
+        """Redoes the last undone drawing or canvas action."""
+        success = self.history.redo(self)
+        if success:
+            self.set_status("Redo")
+        else:
+            self.set_status("Nothing to redo")
+        return success
+
+    @property
+    def can_undo(self) -> bool:
+        return self.history.can_undo
+
+    @property
+    def can_redo(self) -> bool:
+        return self.history.can_redo
+
+    def set_brush_size(self, size: int):
+        self.brush_size = max(1, min(size, 30))
+        self.set_status(f"Brush Size: {self.brush_size}")
 
     def set_status(self, msg: str, duration: int = 45):
         self.status_message = msg
@@ -197,12 +237,14 @@ class Canvas():
                 self.clear_dwell_frames += 1
                 if self.clear_dwell_frames >= self.clear_dwell_threshold:
                     self.end_drawing()
+                    if self.lines or self.circles or self.squares:
+                        self.history.push(ClearCanvasCommand(self.lines, self.circles, self.squares))
                     self.lines = {}
                     self.circles = []
                     self.squares = []
                     self.clear_dwell_frames = 0
                     self.clear_hovering = False
-                    self.set_status("Canvas Cleared")
+                    self.set_status("Canvas Cleared (Undo available)")
             else:
                 self.clear_dwell_frames = 0
                 self.clear_hovering = False
@@ -360,7 +402,7 @@ class Canvas():
             return
         
         if self.currCircle.active == False:
-            self.currCircle = Circle((point_row, point_col), 5, self.color)
+            self.currCircle = Circle((point_row, point_col), 5, self.color, thickness=self.brush_size)
             self.circles.append(self.currCircle)
         else:
             dist = int(xy_euclidean_dist(self.currCircle.origin, new_point))
@@ -374,8 +416,7 @@ class Canvas():
             return
 
         if self.currSquare.active == False:
-            # just initialize with some size
-            self.currSquare = Square(new_point, (point_row + 5, point_col + 5), self.color)
+            self.currSquare = Square(new_point, (point_row + 5, point_col + 5), self.color, thickness=self.brush_size)
             self.squares.append(self.currSquare)
         else:
             self.currSquare.opposite = new_point
@@ -391,38 +432,34 @@ class Canvas():
         row, col = point 
         if not 0 <= row < self.rows or not 0 <= col < self.columns:
             return
-        # TODO: replace hashmap approach with just generic list
-        # if there isn't an active line being drawn, start one
+
         if self.currLine.active == False:
-            # we need to initialize a line
-            line = Line(self.color, point) # start a line with a new color
+            line = Line(self.color, point, thickness=self.brush_size)
             self.currLine = line
-            self.lines[point] = self.currLine # store origin in the lines
+            self.lines[point] = self.currLine
         else:
-            # get the current line, add the new point to the linked list
             self.currLine.points.append(point)
 
     def end_drawing(self):
-        """Ends active drawing"""
-        self.currLine.active = False
-        self.currCircle.active = False
-        self.currSquare.active = False
+        """Ends active drawing and commits completed shape actions to history."""
+        if getattr(self, 'currLine', None) and self.currLine.active:
+            self.currLine.active = False
+            if len(self.currLine.points) > 1:
+                self.history.push(AddLineCommand(self.currLine))
+
+        if getattr(self, 'currCircle', None) and self.currCircle.active:
+            self.currCircle.active = False
+            if self.currCircle.radius > 5:
+                self.history.push(AddCircleCommand(self.currCircle))
+
+        if getattr(self, 'currSquare', None) and self.currSquare.active:
+            self.currSquare.active = False
+            if self.currSquare.get_width() > 5 or self.currSquare.get_height() > 5:
+                self.history.push(AddSquareCommand(self.currSquare))
 
     def draw_lines(self, frame):
-        """
-        Draws all of the lines we have generated so far by looping through line objects
-
-        Args:
-        - frame: The image straight from camera
-
-        Returns:
-        Image with all the different lines drawn on top of it
-        """
-        # self.lines = [{"color": "BLUE",
-        #               "points": [(1, 2), (5, 9), ...]}, 
-        #               {"color": "RED",
-        #               "points": [(6, 0), (5, 8), ...]}, 
         for line in self.lines.values():
+            thick = getattr(line, 'thickness', 5)
             for i, point in enumerate(line.points):
                 if i == 0:
                     continue
@@ -433,25 +470,27 @@ class Canvas():
                         (prev_c, prev_r), 
                         (c, r), 
                         line.color.value,
-                        5
+                        thick
                         )
         return frame
     
     def draw_circles(self, frame):
         for circle in self.circles:
             orig_row, orig_col = circle.origin
-            cv.circle(frame, (orig_col, orig_row), circle.radius, circle.color.value, 3)
+            thick = getattr(circle, 'thickness', 3)
+            cv.circle(frame, (orig_col, orig_row), circle.radius, circle.color.value, thick)
         return frame
     
     def draw_squares(self, frame):
         for square in self.squares:
             topRow, leftCol, bottomRow, rightCol = square.get_coords()
+            thick = getattr(square, 'thickness', 5)
             frame = cv.rectangle(
                 frame,
                 (leftCol, topRow),
                 (rightCol, bottomRow),
                 square.color.value,
-                5
+                thick
             )
         return frame
 
@@ -517,46 +556,50 @@ class Canvas():
         """
         Interprets the position of the pointer, 
         deletes lines if they overlap with the pointer
-
-        Arguments:
-            position: (x, y) coordinates of the position
-            radius: the radius (in pixels) of our eraser
         """
         origin_points = []
-        for origin, lines in self.lines.items():
-            for point in lines.points:
+        removed_lines = []
+        for origin, line in self.lines.items():
+            for point in line.points:
                 if xy_euclidean_dist(point, position) <= radius:
                     origin_points.append(origin)
+                    removed_lines.append(line)
                     break
 
-        for origins in origin_points:
-            self.lines.pop(origins)
+        for origin in origin_points:
+            self.lines.pop(origin)
 
         circles_to_keep = []
+        removed_circles = []
         for circle in self.circles:
             if circle.overlaps_circle(position, radius):
-                continue
+                removed_circles.append(circle)
             else:
                 circles_to_keep.append(circle)
         self.circles = circles_to_keep
 
         squares_to_keep = []
+        removed_squares = []
         for square in self.squares:
             if square.overlaps_circle(position, radius):
-                continue
+                removed_squares.append(square)
             else:
                 squares_to_keep.append(square)
 
         self.squares = squares_to_keep
+
+        if removed_lines or removed_circles or removed_squares:
+            self.history.push(EraseCommand(removed_lines, removed_circles, removed_squares))
 
 class Line():
     """
     Helper class to represent the lines put on the screen
     """
 
-    def __init__(self, color: Color, origin=None):
+    def __init__(self, color: Color, origin=None, thickness: int = 5):
         self.color = color
         self.points = [origin] if origin is not None else []
+        self.thickness = thickness
         self.active = True
 
     def get_origin(self):
@@ -569,10 +612,11 @@ class Line():
 
 class Circle():
     """Helper class to place circles on screen"""
-    def __init__(self, origin, radius: int, color: Color):
+    def __init__(self, origin, radius: int, color: Color, thickness: int = 3):
         self.origin = origin
         self.radius = radius
         self.color = color
+        self.thickness = thickness
         self.active = True
     
     def get_radius(self):
@@ -582,16 +626,16 @@ class Circle():
         dist = xy_euclidean_dist(self.origin, point)
         return max(self.radius - other_radius, 0) <= dist <= self.radius + other_radius
 
-    
     def __repr__(self):
         return f"Origin:{self.origin}\tRadius:{self.radius}\tColor:{self.color}"
 
 
 class Square():
-    def __init__(self, anchor, opposite, color: Color):
+    def __init__(self, anchor, opposite, color: Color, thickness: int = 5):
         self.anchor = anchor
         self.opposite = opposite
         self.color = color
+        self.thickness = thickness
         self.active = True
 
     def get_coords(self):

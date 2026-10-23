@@ -73,8 +73,15 @@ def main():
             stroke = cv.waitKey(1) & 0xff  
             if stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
                 canvas.switch_background()
-            
-            if stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
+            elif stroke == ord('z') or stroke == 26: # 'z' or Ctrl+Z: Undo
+                canvas.undo()
+            elif stroke == ord('y') or stroke == 25: # 'y' or Ctrl+Y: Redo
+                canvas.redo()
+            elif stroke == ord('['): # '[': Decrease brush size
+                canvas.set_brush_size(canvas.brush_size - 2)
+            elif stroke == ord(']'): # ']': Increase brush size
+                canvas.set_brush_size(canvas.brush_size + 2)
+            elif stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
                 break
     finally:
         cap.release()
