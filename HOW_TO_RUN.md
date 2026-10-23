@@ -84,8 +84,8 @@ Simply run the included launcher script, which automatically selects Python 3.11
 - **Hover / Select**: Raise your **index finger** only. Move the cursor over the top toolbar to choose a color or drawing tool.
 - **Draw**: Raise **index + middle fingers** together. Move to draw strokes, circles, or rectangles.
 - **Erase**: Form a **closed fist** or raise **3 fingers** to wipe drawings within the yellow eraser radius.
-- **Translate**: Open your **whole hand** (5 fingers) or form horns to grab and move existing artwork.
-- **Safe Clear All**: Hover your index finger over *Clear all* and hold for ~0.8s (a progress bar fills) to confirm wipe.
+- **Translate**: Open your hand (all five fingers extended) or form the horns pose (index + pinky extended) to move drawings.
+- **Clear canvas**: Hold your index fingertip over `CLEAR` for 25 consecutive frames. The clear action can be undone.
 
 #### ⌨️ Keyboard Shortcuts
 - <kbd>h</kbd> or <kbd>?</kbd>: Toggle interactive in-app help card & gesture guide
