@@ -23,13 +23,15 @@
 ### 🌟 Core Highlights
 
 - 🖐️ **Touchless Input**: Use a compatible webcam; performance depends on your camera and computer.
+- 🎓 **Pre-Camera Gesture Onboarding**: Interactive tutorial screen appears before the camera starts. Teaches navigation, drawing, shape creation, erasing, translation, and shortcuts with procedural vector illustrations.
+- 🚀 **Single Shared Init Path**: "Start Drawing" and "Skip Tutorial" share the exact same camera and hand-tracking initialization workflow.
 - 📐 **Vector-Based Gesture Engine**: Classifies gestures via high-speed trigonometric dot products with 2-frame temporal hysteresis.
 - ↩️ **Command-Pattern Undo/Redo**: Full drawing history engine supporting undo and redo across strokes, circles, squares, erasing, and canvas clears.
 - 💾 **Save & Export**: Save editable projects as JSON and export clean or transparent PNGs at the canvas resolution.
 - 🎨 **Compact Toolbar**: Pick from six colors and three drawing tools; the status bar shows the active gesture, tool, color, and brush size.
-- 🛡️ **Safer Clear**: Hold the `CLEAR` control for 25 consecutive frames to clear the canvas; the action can be undone.
-- ℹ️ **Interactive In-App Guide**: Press <kbd>h</kbd> or <kbd>?</kbd> at any time to display an on-screen gesture cheatsheet and keyboard reference card.
-- 🧪 **Comprehensive CI & Tests**: 38 automated pytest unit tests covering vector math, canvas state, collision detection, history, and persistence with GitHub Actions CI.
+- 🛡️ **Safer Clear**: Hold the `CLEAR` control for 25 consecutive frames (~0.8s) to clear the canvas; the action can be undone.
+- ℹ️ **Interactive In-App Guide & Tutorial**: Press <kbd>t</kbd> anytime to reopen the full Onboarding Tutorial, or press <kbd>h</kbd> for the quick on-screen HUD guide.
+- 🧪 **Comprehensive CI & Tests**: 60 automated pytest unit tests covering vector math, canvas state, onboarding flow, collision detection, history, and persistence with GitHub Actions CI.
 
 ---
 
@@ -49,7 +51,8 @@ AirDraw uses hand landmark geometry to dynamically determine the current interac
 
 | Shortcut | Description |
 | :--- | :--- |
-| <kbd>h</kbd> or <kbd>?</kbd> | Toggle **Interactive In-App Help Overlay** & gesture guide |
+| <kbd>t</kbd> | Reopen full **Interactive Onboarding Tutorial & Gesture Guide** |
+| <kbd>h</kbd> or <kbd>?</kbd> | Toggle **Quick Controls Guide Overlay** & gesture HUD |
 | <kbd>b</kbd> | Toggle canvas background between **Live Camera Stream** and **Dark Whiteboard** |
 | <kbd>z</kbd> or <kbd>Ctrl+Z</kbd> | **Undo** the last completed drawing, erasing, or clear action |
 | <kbd>y</kbd> or <kbd>Ctrl+Y</kbd> | **Redo** the last undone action |
@@ -57,6 +60,7 @@ AirDraw uses hand landmark geometry to dynamically determine the current interac
 | <kbd>s</kbd> or <kbd>Ctrl+S</kbd> | **Save Project** (JSON) and **Export Clean PNG** (artwork only, no webcam feed) |
 | <kbd>e</kbd> | **Export Transparent PNG** (alpha channel drawing export) |
 | <kbd>q</kbd> or <kbd>ESC</kbd> | Close help card if open, or terminate the application loop cleanly |
+
 
 ---
 
@@ -136,6 +140,41 @@ python airdraw.py
 
 ---
 
+## 🎓 First-Launch Onboarding Experience
+
+AirDraw features a built-in pre-camera onboarding screen rendered entirely in dark-mode OpenCV. It appears before opening the webcam or initializing MediaPipe, giving users an immediate overview of all touchless controls:
+
+```mermaid
+flowchart TD
+    Launch[Application Launch] --> Onboard{First Launch or --onboarding?}
+    Onboard -->|Yes| Intro[Onboarding Screen: 3-Step Gesture Guide]
+    Intro --> Action{Start Drawing or Skip Tutorial?}
+    Action -->|Start Drawing| SharedInit[Shared Camera & MediaPipe Init]
+    Action -->|Skip Tutorial| SharedInit
+    Onboard -->|No / Completed| SharedInit
+    SharedInit -->|Success| DrawLoop[Interactive Drawing Canvas]
+    SharedInit -->|Failed| ErrorScreen[Camera Error Recovery Screen]
+    ErrorScreen -->|Retry| SharedInit
+    ErrorScreen -->|Back to Guide| Intro
+    DrawLoop -->|Press T or Help| Intro
+```
+
+### Highlights:
+- **Zero Premature Permissions**: The webcam is never accessed in the background during tutorial display.
+- **Start Drawing**: Primary high-contrast button (<kbd>Enter</kbd> / <kbd>Space</kbd>) initializes camera and enters canvas.
+- **Skip Tutorial**: Prominently visible at the bottom (<kbd>Tab</kbd> / <kbd>s</kbd>) to immediately bypass onboarding into drawing.
+- **Single Shared Init Path**: Both buttons invoke the same robust initialization method, preventing resource leaks.
+- **Reopen Guide Anytime**: Press <kbd>t</kbd> to pause drawing, release camera resources, and return to the onboarding screen. Press <kbd>h</kbd> for the in-app HUD card.
+- **Camera Error Recovery**: If camera access fails (permission denied, device in use), an error screen offers **Retry Camera [R]**, **Back to Guide [B]**, and **Exit [Q]**.
+- **CLI Options**:
+  ```bash
+  python airdraw.py --onboarding    # Force onboarding display
+  python airdraw.py --no-onboarding # Direct launch into camera stream
+  python airdraw.py --camera 1      # Use external camera at index 1
+  ```
+
+---
+
 ## 📐 Mathematical Formulation
 
 ### 1. Angular Gesture Detection
@@ -161,12 +200,13 @@ Airdraw/
 ├── .github/workflows/  # CI pipeline (Python 3.10 & 3.11 test matrix)
 ├── demo_gifs/          # Optional recorded gesture and drawing demonstrations
 ├── airdraw.py          # Application loop, camera lifecycle & event dispatcher
+├── onboarding.py       # Pre-camera onboarding screen, gesture cards & error dialog
 ├── canvas.py           # Canvas state manager, interactive HUD, shapes & renderer
 ├── hands.py            # MediaPipe wrapper, LandmarkBuffer & gesture classifier
 ├── history.py          # Command-pattern Undo/Redo drawing history engine
 ├── persistence.py      # JSON project serialization & clean PNG/transparent PNG exporter
 ├── util.py             # Geometric math, vector operations & Euclidean distance
-├── tests/              # Automated unit test suite (35 pytest test cases)
+├── tests/              # Automated unit test suite (60 pytest test cases)
 ├── data.py             # Dataset capture and replay utility
 ├── run.sh              # One-command automated launch script
 ├── requirements.txt    # Project dependencies & constraints

@@ -71,6 +71,7 @@ class Canvas:
         self.status_message = ""
         self.status_message_frames = 0
         self.show_help = False
+        self.reopen_tutorial = False
 
     def toggle_help(self):
         """Toggles the in-app interactive help overlay."""
@@ -400,7 +401,7 @@ class Canvas:
             status_text = f"{gesture.value}  |  {self.shape.name}  |  {self.color.name}  |  {self.brush_size}px"
             text_color = (245, 245, 245)
 
-        shortcuts_text = "[Z] Undo  [Y] Redo  [H] Help"
+        shortcuts_text = "[Z] Undo  [Y] Redo  [H] Help  [T] Guide"
         font_scale = 0.38 if frame_width >= 720 else 0.31
         status_width = cv.getTextSize(status_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
         shortcuts_width = cv.getTextSize(shortcuts_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
@@ -423,6 +424,8 @@ class Canvas:
 
     def draw_help_overlay(self, frame):
         """Draws a clean, centered interactive help card with gestures and shortcuts."""
+        from onboarding import GESTURE_DEFINITIONS
+
         h, w, _ = frame.shape
         card_w = min(580, w - 40)
         card_h = min(370, h - 50)
@@ -443,26 +446,19 @@ class Canvas:
         cv.rectangle(frame, (x1, y1), (x2, y2), (255, 180, 50), 2)
 
         # Card Title
-        cv.putText(frame, "AirDraw - Quick Controls Guide", (x1 + 20, y1 + 32),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv.LINE_AA)
-        cv.putText(frame, "Press [H] or [ESC] to close", (x2 - 195, y1 + 30),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv.LINE_AA)
+        cv.putText(frame, "AirDraw - Controls Guide", (x1 + 20, y1 + 32),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.60, (255, 255, 255), 2, cv.LINE_AA)
+        cv.putText(frame, "[H] Close  |  [T] Full Tutorial", (x2 - 235, y1 + 30),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1, cv.LINE_AA)
         cv.line(frame, (x1 + 20, y1 + 45), (x2 - 20, y1 + 45), (70, 70, 80), 1)
 
-        # Section 1: Gestures
+        # Section 1: Gestures from shared source of truth
         cv.putText(frame, "TOUCHLESS HAND GESTURES", (x1 + 20, y1 + 70),
                    cv.FONT_HERSHEY_SIMPLEX, 0.46, (0, 220, 255), 1, cv.LINE_AA)
 
-        gestures = [
-            ("1 Finger (Index)", "Move Cursor & Hover / Select Tools"),
-            ("2 Fingers (Index+Mid)", "Draw Strokes & Shapes"),
-            ("3 Fingers / Fist", "Erase elements near cursor"),
-            ("Open Palm / Horns", "Translate & Move Artwork"),
-            ("Hold on CLEAR", "25-frame hold clears canvas (Undo)"),
-        ]
         curr_y = y1 + 92
-        for gesture_title, gesture_desc in gestures:
-            cv.putText(frame, f" * {gesture_title:<22}: {gesture_desc}", (x1 + 20, curr_y),
+        for card in GESTURE_DEFINITIONS[:5]:
+            cv.putText(frame, f" * {card.pose:<23}: {card.title}", (x1 + 20, curr_y),
                        cv.FONT_HERSHEY_SIMPLEX, 0.40, (230, 230, 230), 1, cv.LINE_AA)
             curr_y += 21
 
@@ -478,7 +474,7 @@ class Canvas:
             ("[Z] / [Ctrl+Z]  Undo", "[Y] / [Ctrl+Y]  Redo"),
             ("[ [ / ] ]       Brush Size", "[B]            Toggle Background"),
             ("[S] / [Ctrl+S]  Save & Export PNG", "[E]            Export Transparent PNG"),
-            ("[H]            Toggle Help", "[Q] / [ESC]    Quit AirDraw"),
+            ("[T]            Open Tutorial", "[H]            Toggle Help / Guide"),
         ]
         for col1, col2 in shortcuts:
             cv.putText(frame, f" {col1:<30} {col2}", (x1 + 20, curr_y),
