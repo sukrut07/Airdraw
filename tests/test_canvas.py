@@ -281,3 +281,89 @@ def test_canvas_help_overlay():
 
     canvas.toggle_help()
     assert canvas.show_help is False
+
+def test_toolbar_controls_share_a_compact_row():
+    canvas = Canvas(height=480, width=640)
+    buttons = canvas.get_buttons_coords((480, 640, 3))
+
+    assert [button[0] for button in buttons] == [
+        "CLEAR",
+        "BLUE", "GREEN", "RED", "YELLOW", "PURPLE", "WHITE",
+        "LINE", "CIRCLE", "SQUARE",
+    ]
+
+    y_positions = {(button[2][1], button[3][1]) for button in buttons}
+    assert len(y_positions) == 1
+
+    for _, _, (left, top), (right, bottom) in buttons:
+        assert 0 <= left < right < 640
+        assert 0 <= top < bottom < 480
+        assert bottom < 480 * 0.2
+
+
+def test_clear_dwell_triggers_only_once_until_cursor_leaves():
+    canvas = Canvas(height=480, width=640)
+    canvas.push_point((100, 100))
+    canvas.push_point((110, 110))
+    canvas.end_drawing()
+    assert len(canvas.history.undo_stack) == 1
+
+    clear_button = canvas.get_buttons_coords((480, 640, 3))[0]
+    top_left, bottom_right = clear_button[2], clear_button[3]
+    point = (
+        (top_left[1] + bottom_right[1]) // 2,
+        (top_left[0] + bottom_right[0]) // 2,
+    )
+    hover_data = {
+        "tracking": True,
+        "gesture": Gesture.HOVER,
+        "idx_fing_tip": point,
+        "origin": point,
+    }
+
+    for _ in range(canvas.clear_dwell_threshold * 3):
+        canvas.update_state((480, 640, 3), hover_data)
+
+    assert len(canvas.lines) == 0
+    # One AddLineCommand and exactly one ClearCanvasCommand.
+    assert len(canvas.history.undo_stack) == 2
+
+    assert canvas.undo() is True
+    assert len(canvas.lines) == 1
+
+    # Leaving the button re-arms the clear control for the next deliberate hold.
+    away_data = {
+        "tracking": True,
+        "gesture": Gesture.HOVER,
+        "idx_fing_tip": (300, 300),
+        "origin": (300, 300),
+    }
+    canvas.update_state((480, 640, 3), away_data)
+    assert canvas._clear_latched is False
+
+
+def test_hovering_over_selected_color_does_not_reset_feedback():
+    canvas = Canvas(height=480, width=640)
+    green_button = canvas.get_buttons_coords((480, 640, 3))[2]
+    top_left, bottom_right = green_button[2], green_button[3]
+    point = (
+        (top_left[1] + bottom_right[1]) // 2,
+        (top_left[0] + bottom_right[0]) // 2,
+    )
+    hover_data = {
+        "tracking": True,
+        "gesture": Gesture.HOVER,
+        "idx_fing_tip": point,
+        "origin": point,
+    }
+
+    canvas.update_state((480, 640, 3), hover_data)
+    assert canvas.color == Color.GREEN
+    assert canvas.status_message == "Color set to GREEN"
+    remaining_frames = canvas.status_message_frames
+
+    for _ in range(10):
+        canvas.update_state((480, 640, 3), hover_data)
+
+    assert canvas.status_message_frames == remaining_frames
+
