@@ -1,7 +1,7 @@
 import cv2 as cv
 import numpy as np
 
-from hands import Gesture, HandDetector
+from hands import Gesture
 from util import xy_euclidean_dist, clamp
 
 from enum import Enum
@@ -13,16 +13,6 @@ from history import (
     EraseCommand,
     ClearCanvasCommand,
 )
-
-# FIXME: 
-# use a good spatial query system (is just iterating over literally every point the best we can do?) 
-# Gauging this would need the following:
-#   How many data points could i realistically collect over a 2-minute episode?
-#   How much does it cost to iterate and compare versus 
-#       1. storing waypoints in a grid, and then searching every pixel in the grid
-#       2. Storing all points in some sort of query system (intuition screaming quadtree).
-# have consistent usage of row, col convention between mediapipe, canvas, and opencv. 
-# keep all data intialized at startup and only completely transform in function
 
 class Color(Enum):
     """Please remember these are in BGR coordinates!"""
@@ -39,7 +29,7 @@ class Shape(Enum):
     SQUARE = Color.GRAY
     LINE = Color.GREEN
 
-class Canvas():
+class Canvas:
     """ 
     This class is responsible for "drawing" all state onto the screen. 
     This includes the actual dashboard hands interact with as well as lines, backgrounds, etc.
@@ -80,6 +70,7 @@ class Canvas():
         self.status_message = ""
         self.status_message_frames = 0
         self.show_help = False
+        self._last_hover_target = None
 
     def toggle_help(self):
         """Toggles the in-app interactive help overlay."""
@@ -113,7 +104,7 @@ class Canvas():
 
     def set_brush_size(self, size: int):
         self.brush_size = max(1, min(size, 30))
-        self.set_status(f"Brush Size: {self.brush_size}")
+        self.set_status(f"Brush size: {self.brush_size} px")
 
     def set_status(self, msg: str, duration: int = 45):
         self.status_message = msg
@@ -208,15 +199,17 @@ class Canvas():
         r, c = fingertip_point
         return leftCoord <= c <= rightCoord and topCoord <= r <= bottomCoord
 
-    def update_state(self, frame_shape, data = {}):
+    def update_state(self, frame_shape, data=None):
         """
         Takes in state updates from hands and updates internal canvas state.
         Safely stops drawing when hand tracking is lost and protects against accidental actions.
         """
+        data = data or {}
         if not data or data.get('tracking') is False:
             self.end_drawing()
             self.clear_dwell_frames = 0
             self.clear_hovering = False
+            self._last_hover_target = None
             return
 
         gesture = data.get("gesture", Gesture.NONE)
@@ -224,6 +217,7 @@ class Canvas():
             self.end_drawing()
             self.clear_dwell_frames = 0
             self.clear_hovering = False
+            self._last_hover_target = None
             return
 
         buttons_coord = self.get_buttons_coords(frame_shape)
@@ -249,29 +243,38 @@ class Canvas():
                     self.squares = []
                     self.clear_dwell_frames = 0
                     self.clear_hovering = False
-                    self.set_status("Canvas Cleared (Undo available)")
+                    self.set_status("Canvas cleared — Undo available")
             else:
                 self.clear_dwell_frames = 0
                 self.clear_hovering = False
 
-            # Overlap with color buttons
+            # Apply a tool change only when the cursor enters a different control.
+            # This avoids repeating the same status message on every video frame.
+            hover_target = None
             for color_button_metadata in color_buttons:
                 button_color_str = color_button_metadata[0]
                 if self.buttons_overlap(color_button_metadata[2:], cursor_coord):
-                    new_color = [color for color in self.colors if color.name == button_color_str][0]
-                    self.color = new_color
-                    self.set_status(f"Color: {new_color.name}")
+                    hover_target = ("color", button_color_str)
+                    if self.color.name != button_color_str:
+                        self.color = Color[button_color_str]
+                        self.set_status(f"Color set to {self.color.name}")
+                    break
 
-            # Overlap with shape buttons
-            for shape_button_metadata in shape_buttons:
-                shape_str = shape_button_metadata[0]
-                if self.buttons_overlap(shape_button_metadata[2:], cursor_coord):
-                    new_shape = [shape for shape in self.shapes if shape.name == shape_str][0]
-                    self.shape = new_shape
-                    self.set_status(f"Shape: {new_shape.name}")
+            if hover_target is None:
+                for shape_button_metadata in shape_buttons:
+                    shape_str = shape_button_metadata[0]
+                    if self.buttons_overlap(shape_button_metadata[2:], cursor_coord):
+                        hover_target = ("shape", shape_str)
+                        if self.shape.name != shape_str:
+                            self.shape = Shape[shape_str]
+                            self.set_status(f"Tool set to {self.shape.name}")
+                        break
+
+            self._last_hover_target = hover_target
         else:
             self.clear_dwell_frames = 0
             self.clear_hovering = False
+            self._last_hover_target = None
 
         # Execute gesture actions
         origin = data.get('origin')
@@ -491,7 +494,8 @@ class Canvas():
 
         return frame
     
-    def update_and_draw(self, frame, data = {}):
+    def update_and_draw(self, frame, data=None):
+        data = data or {}
         self.update_state(frame.shape, data)
         frame = self.draw_canvas(frame, data)
         return frame
