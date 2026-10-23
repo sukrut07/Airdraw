@@ -81,7 +81,7 @@ Simply run the included launcher script, which automatically selects Python 3.11
 ### 🎮 In-App Gestures & Keyboard Controls
 
 #### 🖐️ Hand Gestures
-- **Hover / Select**: Raise your **index finger** only. Move cursor over top buttons to pick color or shape.
+- **Hover / Select**: Raise your **index finger** only. Move the cursor over the top toolbar to choose a color or drawing tool.
 - **Draw**: Raise **index + middle fingers** together. Move to draw strokes, circles, or rectangles.
 - **Erase**: Form a **closed fist** or raise **3 fingers** to wipe drawings within the yellow eraser radius.
 - **Translate**: Open your **whole hand** (5 fingers) or form horns to grab and move existing artwork.
@@ -89,7 +89,7 @@ Simply run the included launcher script, which automatically selects Python 3.11
 
 #### ⌨️ Keyboard Shortcuts
 - <kbd>h</kbd> or <kbd>?</kbd>: Toggle interactive in-app help card & gesture guide
-- <kbd>b</kbd>: Toggle canvas background between **Live Camera** and **Dark Whiteboard**
+- <kbd>b</kbd>: Toggle canvas background between **Live Camera** and **Black whiteboard**
 - <kbd>z</kbd> / <kbd>Ctrl+Z</kbd>: Undo last drawing action
 - <kbd>y</kbd> / <kbd>Ctrl+Y</kbd>: Redo undone action
 - <kbd>[</kbd> / <kbd>]</kbd>: Decrease / increase brush size
