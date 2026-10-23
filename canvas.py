@@ -67,10 +67,10 @@ class Canvas:
         self.clear_dwell_frames = 0
         self.clear_dwell_threshold = 25  # ~0.8s hold to confirm clear
         self.clear_hovering = False
+        self._clear_latched = False
         self.status_message = ""
         self.status_message_frames = 0
         self.show_help = False
-        self._last_hover_target = None
 
     def toggle_help(self):
         """Toggles the in-app interactive help overlay."""
@@ -114,80 +114,51 @@ class Canvas:
         self.blackout_background = not self.blackout_background
 
     def get_buttons_coords(self, frame_shape):
-        """
-        Returns coordinates of the buttons (and colors) to draw on the UI, used to save space later on.
-        Should be useful for detecting overlap between fingers and buttons.
+        """Return toolbar hitboxes in (top-left, bottom-right) screen coordinates.
 
-        Args:
-            frame_shape: tuple describing frame shape
-        Return:
-            List with elements holding the following schema: (button name, button BGR colors, top-left coordinate, bottom-right coordinate)
-            Ordering of the elements is as follows:
-                1. Clear all button
-                2. Color buttons
-                3. Shape buttons
+        The toolbar is a single compact row so it leaves more of the camera view
+        available for drawing. Ordering remains: clear, colors, then shape tools.
         """
-
-        # Obtains the proportionally correct buttons for the frame shape given. 
-        frame_height, frame_width, _ = frame_shape
+        frame_height, frame_width = frame_shape[:2]
+        margin = max(3, int(min(frame_height, frame_width) * 0.008))
+        gap = max(2, int(frame_width * 0.004))
+        toolbar_height = max(38, min(72, int(frame_height * 0.13)))
+        clear_width = max(66, int(frame_width * 0.14))
+        slots = len(self.colors) + len(self.shapes)
+        slot_width = max(1, (frame_width - clear_width - margin * 2 - gap * (slots - 1)) // slots)
+        top = margin
+        bottom = max(top + 1, toolbar_height - margin)
 
         coords = []
+        clear_right = min(frame_width - 1, margin + clear_width)
+        coords.append((
+            "CLEAR",
+            (48, 48, 58),
+            (margin, top),
+            (clear_right, bottom),
+        ))
 
-        # add clear_button
-        # Clear button is manually sized, all other buttons are manually sized
-        clear_button_width = int(frame_width *.2) 
-        clear_button_height = int(frame_height * .15) 
-
-        clear_button_width_border = int(clear_button_width * .05) 
-        clear_button_height_border = int(clear_button_height * .05)
-
-        coords.append(
-            (
-                "Clear all",
-                Color.GRAY.value,
-                (clear_button_width_border, clear_button_height_border), 
-                (clear_button_width - clear_button_width_border, clear_button_height - clear_button_height_border)
-            ))
-
-        num_colors = len(self.colors)
-        remaining_width = frame_width - clear_button_width
-
-        color_button_width = remaining_width // num_colors 
-        color_button_height = int(clear_button_height * 0.7)
-        color_button_border_width = int(color_button_width * 0.05)
-        color_button_border_height = int(color_button_height * 0.05)
-        curr_button_offset_width = clear_button_width
-
-        # FIXME: use color.name instead?
+        x = clear_right + gap
         for color in self.colors:
+            right = min(frame_width - 1, x + slot_width)
             coords.append((
                 color.name,
                 color.value,
-                (curr_button_offset_width  + color_button_border_width, color_button_border_height),
-                (curr_button_offset_width  + color_button_width - color_button_border_width, color_button_height - color_button_border_height)
+                (x, top),
+                (right, bottom),
             ))
+            x = right + gap
 
-            curr_button_offset_width += color_button_width
-        
-        num_shapes = len(Shape)
-        remaining_height = frame_height - clear_button_height
-        shape_button_height = (remaining_height // num_shapes)
-        shape_button_width = int(clear_button_width * 0.7)
-        shape_button_border_height = int(shape_button_height * 0.05)
-        shape_button_border_width = int(shape_button_width * 0.05)
-
-        curr_button_offset_height = clear_button_height
-
-        for shape in Shape:
+        for shape in self.shapes:
+            right = min(frame_width - 1, x + slot_width)
             coords.append((
                 shape.name,
-                shape.value.value,
-                (shape_button_border_width, curr_button_offset_height + shape_button_border_height),
-                (shape_button_width - shape_button_border_width, curr_button_offset_height + shape_button_height - shape_button_border_height)
+                (48, 48, 58),
+                (x, top),
+                (right, bottom),
             ))
+            x = right + gap
 
-            curr_button_offset_height += shape_button_height
-        
         return coords
 
     def buttons_overlap(self, buttons_coords, fingertip_point):
@@ -209,7 +180,8 @@ class Canvas:
             self.end_drawing()
             self.clear_dwell_frames = 0
             self.clear_hovering = False
-            self._last_hover_target = None
+            self.clear_dwell_frames = 0
+            self._clear_latched = False
             return
 
         gesture = data.get("gesture", Gesture.NONE)
@@ -233,20 +205,22 @@ class Canvas:
             # Overlap with Clear All button (requires holding for dwell confirmation)
             if self.buttons_overlap(clear_button[2:], cursor_coord):
                 self.clear_hovering = True
-                self.clear_dwell_frames += 1
-                if self.clear_dwell_frames >= self.clear_dwell_threshold:
-                    self.end_drawing()
-                    if self.lines or self.circles or self.squares:
-                        self.history.push(ClearCanvasCommand(self.lines, self.circles, self.squares))
-                    self.lines = {}
-                    self.circles = []
-                    self.squares = []
-                    self.clear_dwell_frames = 0
-                    self.clear_hovering = False
-                    self.set_status("Canvas cleared — Undo available")
+                if not self._clear_latched:
+                    self.clear_dwell_frames += 1
+                    if self.clear_dwell_frames >= self.clear_dwell_threshold:
+                        self.end_drawing()
+                        if self.lines or self.circles or self.squares:
+                            self.history.push(ClearCanvasCommand(self.lines, self.circles, self.squares))
+                        self.lines = {}
+                        self.circles = []
+                        self.squares = []
+                        self.clear_dwell_frames = self.clear_dwell_threshold
+                        self._clear_latched = True
+                        self.set_status("Canvas cleared — Undo available")
             else:
                 self.clear_dwell_frames = 0
                 self.clear_hovering = False
+                self._clear_latched = False
 
             # Apply a tool change only when the cursor enters a different control.
             # This avoids repeating the same status message on every video frame.
@@ -270,7 +244,6 @@ class Canvas:
                             self.set_status(f"Tool set to {self.shape.name}")
                         break
 
-            self._last_hover_target = hover_target
         else:
             self.clear_dwell_frames = 0
             self.clear_hovering = False
@@ -307,51 +280,63 @@ class Canvas:
                 self.translate_mode((midpoint_r, midpoint_c), radius, shift)
     
     def draw_canvas(self, frame, data):
-        """
-        Renders dashboard onto screen
-        """
+        """Render the camera/whiteboard, compact toolbar, artwork, cursor and status."""
+        data = data or {}
         if self.blackout_background:
             frame = np.zeros_like(frame)
 
+        frame_height, frame_width = frame.shape[:2]
         buttons_coord = self.get_buttons_coords(frame.shape)
+        toolbar_bottom = min(frame_height - 1, max(38, min(72, int(frame_height * 0.13))))
+        toolbar_overlay = frame.copy()
+        cv.rectangle(toolbar_overlay, (0, 0), (frame_width - 1, toolbar_bottom), (24, 24, 29), -1)
+        frame = cv.addWeighted(frame, 0.28, toolbar_overlay, 0.72, 0)
 
         for button_metadata in buttons_coord:
-            button_str = button_metadata[0]
-            button_color_rgb = button_metadata[1]
-            button_left, button_top = button_metadata[2]
-            button_right, button_bottom = button_metadata[3]
+            button_name, button_color, top_left, bottom_right = button_metadata
+            x1, y1 = top_left
+            x2, y2 = bottom_right
 
-            frame = cv.rectangle(frame, 
-                                (button_left, button_top),
-                                (button_right, button_bottom),
-                                button_color_rgb, -1)
+            cv.rectangle(frame, top_left, bottom_right, button_color, -1)
+            cv.rectangle(frame, top_left, bottom_right, (90, 90, 100), 1)
 
-            button_width = button_right - button_left
-            button_height = button_bottom - button_top
+            # Match contrast to the color swatch for easy reading.
+            if button_name in Color.__members__:
+                color = Color[button_name]
+                brightness = sum(color.value) / 3
+                text_color = (25, 25, 25) if brightness > 175 else (250, 250, 250)
+                selected = self.color.name == button_name
+                if selected:
+                    cv.rectangle(frame, (x1 + 1, y1 + 1), (x2 - 1, y2 - 1), (255, 255, 255), 2)
+            elif button_name in Shape.__members__:
+                text_color = (245, 245, 245)
+                selected = self.shape.name == button_name
+                if selected:
+                    cv.rectangle(frame, (x1 + 1, y1 + 1), (x2 - 1, y2 - 1), (0, 220, 255), 2)
+            else:
+                text_color = (100, 100, 255)
+                selected = False
 
-            cv.putText(frame, button_str, 
-                    (button_left + int((button_width)* .25), int(button_top + button_height * .55)), 
-                    cv.FONT_HERSHEY_SIMPLEX, .45, Color.WHITE.value, 1, cv.LINE_AA)
+            label = "CLEAR" if button_name == "CLEAR" else button_name
+            max_text_width = max(8, x2 - x1 - 8)
+            font_scale = 0.40
+            while font_scale > 0.22:
+                text_size = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0]
+                if text_size[0] <= max_text_width:
+                    break
+                font_scale -= 0.02
+            text_size = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0]
+            text_x = x1 + max(3, (x2 - x1 - text_size[0]) // 2)
+            text_y = y1 + (y2 - y1 + text_size[1]) // 2
+            cv.putText(frame, label, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX,
+                       font_scale, text_color, 1, cv.LINE_AA)
 
-            # Highlight selected color or shape
-            if button_str == self.color.name or button_str == self.shape.name:
-                cv.rectangle(frame,
-                             (button_left, button_top),
-                             (button_right, button_bottom),
-                             (255, 255, 255), 2)
-
-            # Clear all dwell progress indicator
-            if button_str == "Clear all" and self.clear_hovering and self.clear_dwell_frames > 0:
+            if button_name == "CLEAR" and self.clear_hovering and self.clear_dwell_frames > 0:
                 progress = min(1.0, self.clear_dwell_frames / self.clear_dwell_threshold)
-                fill_w = int(button_width * progress)
-                cv.rectangle(frame,
-                             (button_left, button_bottom - 8),
-                             (button_left + fill_w, button_bottom),
-                             (0, 0, 255), -1)
-                cv.putText(frame, "HOLD TO CLEAR",
-                           (button_left + 5, button_bottom - 12),
-                           cv.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1, cv.LINE_AA)
+                fill_width = int((x2 - x1) * progress)
+                cv.rectangle(frame, (x1, y2 - 4), (x1 + fill_width, y2), (0, 0, 255), -1)
 
+        # Draw drawing primitives
         # Draw drawing primitives
         frame = self.draw_lines(frame)
         frame = self.draw_circles(frame)
@@ -397,31 +382,41 @@ class Canvas:
                 cv.circle(frame, (c_c, c_r), int(radius), Color.WHITE.value, 2)
                 cv.putText(frame, "MOVE", (c_c + 14, c_r - 6), cv.FONT_HERSHEY_SIMPLEX, 0.4, Color.WHITE.value, 1, cv.LINE_AA)
 
-        # Bottom HUD Status Bar (semi-transparent dark pill)
-        hud_height = 36
-        hud_y = frame.shape[0] - hud_height
+        # Compact status bar keeps the action and shortcut text from colliding
+        # on common 640px-wide webcam frames.
+        hud_height = max(30, min(38, int(frame_height * 0.075)))
+        hud_y = frame_height - hud_height
         hud_overlay = frame.copy()
-        cv.rectangle(hud_overlay, (0, hud_y), (frame.shape[1], frame.shape[0]), (25, 25, 25), -1)
-        frame = cv.addWeighted(frame, 0.30, hud_overlay, 0.70, 0)
-        cv.line(frame, (0, hud_y), (frame.shape[1], hud_y), (60, 60, 60), 1)
+        cv.rectangle(hud_overlay, (0, hud_y), (frame_width - 1, frame_height - 1), (20, 20, 24), -1)
+        frame = cv.addWeighted(frame, 0.22, hud_overlay, 0.78, 0)
+        cv.line(frame, (0, hud_y), (frame_width - 1, hud_y), (70, 70, 78), 1)
 
         if not tracking:
-            status_text = "MODE: LOST | Bring hand into view to draw"
-            text_color = (0, 0, 255)
+            status_text = "No hand detected — move your hand into view"
+            text_color = (90, 90, 255)
         elif self.status_message_frames > 0:
-            status_text = f"ACTION: {self.status_message}"
-            text_color = (0, 255, 255)
+            status_text = self.status_message
+            text_color = (0, 235, 255)
             self.status_message_frames -= 1
         else:
-            status_text = f"MODE: {gesture.value} | TOOL: {self.shape.name} | COLOR: {self.color.name} | BRUSH: {self.brush_size}px"
-            text_color = (240, 240, 240)
+            status_text = f"{gesture.value}  |  {self.shape.name}  |  {self.color.name}  |  {self.brush_size}px"
+            text_color = (245, 245, 245)
 
-        cv.putText(frame, status_text, (15, frame.shape[0] - 12),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.48, text_color, 1, cv.LINE_AA)
+        shortcuts_text = "[Z] Undo  [Y] Redo  [H] Help"
+        font_scale = 0.38 if frame_width >= 720 else 0.31
+        status_width = cv.getTextSize(status_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
+        shortcuts_width = cv.getTextSize(shortcuts_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
+        available_status_width = max(40, frame_width - shortcuts_width - 35)
+        while status_width > available_status_width and font_scale > 0.25:
+            font_scale -= 0.02
+            status_width = cv.getTextSize(status_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
+            shortcuts_width = cv.getTextSize(shortcuts_text, cv.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0][0]
 
-        undo_status = f"UNDO: {'YES' if self.can_undo else 'NO'} | REDO: {'YES' if self.can_redo else 'NO'} | [H] HELP"
-        cv.putText(frame, undo_status, (max(15, frame.shape[1] - 310), frame.shape[0] - 12),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv.LINE_AA)
+        baseline_y = frame_height - max(8, (hud_height - 12) // 2)
+        cv.putText(frame, status_text, (12, baseline_y), cv.FONT_HERSHEY_SIMPLEX,
+                   font_scale, text_color, 1, cv.LINE_AA)
+        cv.putText(frame, shortcuts_text, (max(12, frame_width - shortcuts_width - 12), baseline_y),
+                   cv.FONT_HERSHEY_SIMPLEX, font_scale, (175, 175, 185), 1, cv.LINE_AA)
 
         if self.show_help:
             frame = self.draw_help_overlay(frame)
