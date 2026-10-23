@@ -1,4 +1,4 @@
-# 🎨 AirDraw: Real-Time Hand Gesture Virtual Canvas
+# AirDraw — Touchless Drawing with Hand Gestures
 
 <div align="center">
 
@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-brightgreen?style=for-the-badge)](https://github.com/sukrut07/Airdraw)
 
 <p align="center">
-  <b>A touchless, computer-vision-powered air canvas. Draw, hover, erase, and manipulate geometric primitives in real time using webcam hand-tracking and vector mathematics.</b>
+  <b>Turn your webcam into a drawing tool. AirDraw uses hand tracking to sketch strokes, create shapes, erase marks, and move artwork without touching your screen.</b>
 </p>
 
 </div>
@@ -18,16 +18,16 @@
 
 ## 📖 Overview
 
-**AirDraw** transforms your standard computer webcam into an interactive gesture-controlled drawing canvas. By pairing **Google MediaPipe's** 21 3D hand landmark model with **OpenCV** and classical linear algebra, AirDraw accurately interprets hand gestures without requiring physical markers, styluses, or wearable hardware.
+**AirDraw** turns a standard webcam into a touchless drawing canvas. It combines MediaPipe's 21 hand landmarks with OpenCV-based rendering and geometric gesture classification, so you can draw without a stylus or any additional hardware.
 
 ### 🌟 Core Highlights
 
-- 🖐️ **Zero-Hardware Touchless Input**: Operates on any standard webcam at real-time 30+ FPS.
+- 🖐️ **Touchless Input**: Use a compatible webcam; performance depends on your camera and computer.
 - 📐 **Vector-Based Gesture Engine**: Classifies gestures via high-speed trigonometric dot products with 2-frame temporal hysteresis.
 - ↩️ **Command-Pattern Undo/Redo**: Full drawing history engine supporting undo and redo across strokes, circles, squares, erasing, and canvas clears.
-- 💾 **Project Persistence & Export**: Save editable drawings to versioned JSON (`projects/`) and export high-res clean PNGs or transparent background PNGs (`exports/`).
-- 🎨 **Floating Virtual HUD & Cursor**: Interactive multi-state cursor (`CURSOR`, `DRAW`, `ERASE`, `MOVE`) with 6 vibrant colors and a bottom telemetry status bar.
-- 🛡️ **Accidental Clear Protection**: Hold-to-confirm dwell countdown (~0.8s hold with visual progress bar) prevents accidental canvas wipes; full wipe is reversible via Undo.
+- 💾 **Save & Export**: Save editable projects as JSON and export clean or transparent PNGs at the canvas resolution.
+- 🎨 **Compact Toolbar**: Pick from six colors and three drawing tools; the status bar shows the active gesture, tool, color, and brush size.
+- 🛡️ **Safer Clear**: Hold the `CLEAR` control for 25 consecutive frames to clear the canvas; the action can be undone.
 - ℹ️ **Interactive In-App Guide**: Press <kbd>h</kbd> or <kbd>?</kbd> at any time to display an on-screen gesture cheatsheet and keyboard reference card.
 - 🧪 **Comprehensive CI & Tests**: 35 automated pytest unit tests covering vector math, canvas state, collision detection, history, and persistence with GitHub Actions CI.
 
@@ -39,11 +39,11 @@ AirDraw uses hand landmark geometry to dynamically determine the current interac
 
 | Mode | Hand Pose | Trigger Condition | Functionality |
 | :--- | :--- | :--- | :--- |
-| **`HOVER`** | ☝️ **Index finger up** | Index extended, others curled | Moves cursor passively; hover over top buttons to pick color, shape, or trigger actions |
+| **`HOVER`** | ☝️ **Index finger up** | Index extended, others curled | Moves cursor passively; hover over the top toolbar to choose a color or drawing tool |
 | **`DRAW`** | ✌️ **Index + Middle up** | Index and middle extended | Draws the active primitive (freehand stroke, circle, or rectangle) |
 | **`ERASE`** | ✊ **Fist / 3 fingers** | Closed fist or 3 fingers | Erases any stroke, circle, or square intersecting the yellow eraser radius |
 | **`TRANSLATE`**| 🖐️ **Open palm / horns** | All 5 fingers extended | Calculates hand displacement and moves existing drawings across the screen |
-| **`CLEAR ALL`** | ⏱️ **Hold on button** | Index finger on *Clear all* | 25-frame dwell timer confirms wipe with a visual progress bar (undoable!) |
+| **`CLEAR`** | ⏱️ **Hold to confirm** | Index finger stays over `CLEAR` for 25 frames | Clears the canvas; Undo restores the artwork |
 
 ### 🎛️ Keyboard Shortcuts
 
@@ -143,10 +143,10 @@ Fingers are evaluated using the cosine of the angle $\theta$ between the palm-to
 
 $$\cos(\theta) = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\| \|\vec{v}\|}$$
 
-When $\cos(\theta) \ge \tau$ (where threshold $\tau \approx 0.70$), the finger is classified as extended; otherwise, it is recognized as folded.
+When $\cos(\theta) > \tau$ (the implementation uses a default threshold of $\tau = 0.30$), the finger is classified as extended; otherwise, it is treated as folded.
 
 ### 2. Jitter Reduction with RingBuffer
-To prevent frame-to-frame trembling, landmark coordinates are smoothed across a sliding temporal window of size $N=5$:
+To reduce frame-to-frame jitter, landmark coordinates are averaged across up to the five most recent tracked frames:
 
 $$\bar{P}_i = \frac{1}{N} \sum_{k=1}^{N} P_{i,k}$$
 
@@ -159,6 +159,7 @@ where $P_{i,k}$ represents the 3D position of landmark $i$ at frame $k$.
 ```
 Airdraw/
 ├── .github/workflows/  # CI pipeline (Python 3.10 & 3.11 test matrix)
+├── demo_gifs/          # Optional recorded gesture and drawing demonstrations
 ├── airdraw.py          # Application loop, camera lifecycle & event dispatcher
 ├── canvas.py           # Canvas state manager, interactive HUD, shapes & renderer
 ├── hands.py            # MediaPipe wrapper, LandmarkBuffer & gesture classifier
@@ -184,7 +185,7 @@ AirDraw includes a comprehensive unit test suite built with `pytest`:
 # Run all tests
 pytest -v
 
-# Run with coverage report
+# Run tests with concise failure output
 pytest --tb=short
 ```
 
