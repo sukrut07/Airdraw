@@ -1,7 +1,10 @@
+import os
+from datetime import datetime
 import numpy as np
 import cv2 as cv
 from hands import HandDetector
 from canvas import Canvas
+from persistence import save_project, export_png
 
 
 def replay(fname):
@@ -51,8 +54,15 @@ def main():
     # initialize the canvas element and hand-detector program
     canvas = Canvas(height=height, width=width)
     detector = HandDetector()
-    print(f"Airdraw initialized ({width}x{height})")
-    print("Controls: Press 'b' to toggle camera/black background, 'q' or ESC to quit")
+    print(f"AirDraw initialized ({width}x{height})")
+    print("Controls:")
+    print("  [b] Toggle camera / blackout background")
+    print("  [z / Ctrl+Z] Undo")
+    print("  [y / Ctrl+Y] Redo")
+    print("  [ [ / ] ] Decrease / Increase brush size")
+    print("  [s / Ctrl+S] Save project & Export clean PNG")
+    print("  [e] Export Transparent PNG")
+    print("  [q / ESC] Quit")
     
     try:
         while True:
@@ -81,6 +91,18 @@ def main():
                 canvas.set_brush_size(canvas.brush_size - 2)
             elif stroke == ord(']'): # ']': Increase brush size
                 canvas.set_brush_size(canvas.brush_size + 2)
+            elif stroke == ord('s') or stroke == 19: # 's' or Ctrl+S: Save & Export PNG
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                proj_file = f"projects/airdraw_{ts}.json"
+                png_file = f"exports/airdraw_{ts}.png"
+                save_project(canvas, proj_file)
+                export_png(canvas, png_file, transparent=False)
+                canvas.set_status(f"Saved: {os.path.basename(png_file)}")
+            elif stroke == ord('e'): # 'e': Export Transparent PNG
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                png_file = f"exports/airdraw_trans_{ts}.png"
+                export_png(canvas, png_file, transparent=True)
+                canvas.set_status(f"Exported: {os.path.basename(png_file)}")
             elif stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
                 break
     finally:

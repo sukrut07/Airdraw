@@ -46,6 +46,8 @@ ehthumbs.db
 *.avi
 *.mov
 *.mkv
+exports/
+projects/
 
 # ==========================================
 # Python Bytecode & Runtime Cache
