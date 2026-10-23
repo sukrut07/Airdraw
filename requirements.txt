@@ -7,3 +7,6 @@ protobuf<5,>=3.19.1
 # Image processing & visualization
 Pillow>=8.4.0
 matplotlib>=3.4.3
+
+# Testing & Quality
+pytest>=7.0.0

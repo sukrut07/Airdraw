@@ -16,6 +16,7 @@ def vector_magnitude(vector):
 def cos_angle(u, v):
     u_mag = vector_magnitude(u)
     v_mag = vector_magnitude(v)
-    if (u_mag == 0 or v_mag == 0):
-        return 0
-    return np.dot(u, v) / (vector_magnitude(u) * vector_magnitude(v))
+    if u_mag == 0 or v_mag == 0:
+        return 0.0
+    val = float(np.dot(u, v) / (u_mag * v_mag))
+    return float(np.clip(val, -1.0, 1.0))
