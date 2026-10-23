@@ -56,7 +56,8 @@ def main():
     detector = HandDetector()
     print(f"AirDraw initialized ({width}x{height})")
     print("Controls:")
-    print("  [b] Toggle camera / blackout background")
+    print("  [h / ?] Toggle interactive help & gesture guide")
+    print("  [b] Toggle camera / whiteboard background")
     print("  [z / Ctrl+Z] Undo")
     print("  [y / Ctrl+Y] Redo")
     print("  [ [ / ] ] Decrease / Increase brush size")
@@ -81,7 +82,11 @@ def main():
             cv.imshow("Airdraw", frame)
         
             stroke = cv.waitKey(1) & 0xff  
-            if stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
+            if stroke == ord('h') or stroke == ord('?'): # press 'h' or '?' to toggle help overlay
+                canvas.toggle_help()
+            elif stroke == 27 and canvas.show_help: # 'esc' closes help if open
+                canvas.show_help = False
+            elif stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
                 canvas.switch_background()
             elif stroke == ord('z') or stroke == 26: # 'z' or Ctrl+Z: Undo
                 canvas.undo()

@@ -79,6 +79,11 @@ class Canvas():
         self.clear_hovering = False
         self.status_message = ""
         self.status_message_frames = 0
+        self.show_help = False
+
+    def toggle_help(self):
+        """Toggles the in-app interactive help overlay."""
+        self.show_help = not self.show_help
 
     def undo(self) -> bool:
         """Undoes the last completed drawing or canvas action."""
@@ -411,9 +416,78 @@ class Canvas():
         cv.putText(frame, status_text, (15, frame.shape[0] - 12),
                    cv.FONT_HERSHEY_SIMPLEX, 0.48, text_color, 1, cv.LINE_AA)
 
-        undo_status = f"UNDO: {'YES' if self.can_undo else 'NO'} | REDO: {'YES' if self.can_redo else 'NO'}"
-        cv.putText(frame, undo_status, (max(15, frame.shape[1] - 230), frame.shape[0] - 12),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.45, (170, 170, 170), 1, cv.LINE_AA)
+        undo_status = f"UNDO: {'YES' if self.can_undo else 'NO'} | REDO: {'YES' if self.can_redo else 'NO'} | [H] HELP"
+        cv.putText(frame, undo_status, (max(15, frame.shape[1] - 310), frame.shape[0] - 12),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv.LINE_AA)
+
+        if self.show_help:
+            frame = self.draw_help_overlay(frame)
+
+        return frame
+
+    def draw_help_overlay(self, frame):
+        """Draws a clean, centered interactive help card with gestures and shortcuts."""
+        h, w, _ = frame.shape
+        card_w = min(580, w - 40)
+        card_h = min(370, h - 50)
+        x1 = (w - card_w) // 2
+        y1 = (h - card_h) // 2
+        x2 = x1 + card_w
+        y2 = y1 + card_h
+
+        # Dim background slightly for focus
+        dim = frame.copy()
+        cv.rectangle(dim, (0, 0), (w, h), (0, 0, 0), -1)
+        frame = cv.addWeighted(frame, 0.4, dim, 0.6, 0)
+
+        # Modal card background
+        card_bg = frame.copy()
+        cv.rectangle(card_bg, (x1, y1), (x2, y2), (28, 28, 34), -1)
+        frame = cv.addWeighted(frame, 0.15, card_bg, 0.85, 0)
+        cv.rectangle(frame, (x1, y1), (x2, y2), (255, 180, 50), 2)
+
+        # Card Title
+        cv.putText(frame, "AirDraw - Controls & Gesture Guide", (x1 + 20, y1 + 32),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv.LINE_AA)
+        cv.putText(frame, "Press [H] or [ESC] to close", (x2 - 195, y1 + 30),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv.LINE_AA)
+        cv.line(frame, (x1 + 20, y1 + 45), (x2 - 20, y1 + 45), (70, 70, 80), 1)
+
+        # Section 1: Gestures
+        cv.putText(frame, "TOUCHLESS HAND GESTURES", (x1 + 20, y1 + 70),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.46, (0, 220, 255), 1, cv.LINE_AA)
+
+        gestures = [
+            ("1 Finger (Index)", "Move Cursor & Hover / Select Tools"),
+            ("2 Fingers (Index+Mid)", "Draw Strokes & Shapes"),
+            ("3 Fingers / Fist", "Erase elements near cursor"),
+            ("Open Palm / Horns", "Translate & Move Artwork"),
+            ("Hold on 'Clear all'", "Dwell timer (~0.8s) confirms wipe"),
+        ]
+        curr_y = y1 + 92
+        for gesture_title, gesture_desc in gestures:
+            cv.putText(frame, f" * {gesture_title:<22}: {gesture_desc}", (x1 + 20, curr_y),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.40, (230, 230, 230), 1, cv.LINE_AA)
+            curr_y += 21
+
+        # Section 2: Keyboard Shortcuts
+        curr_y += 8
+        cv.line(frame, (x1 + 20, curr_y), (x2 - 20, curr_y), (70, 70, 80), 1)
+        curr_y += 20
+        cv.putText(frame, "KEYBOARD SHORTCUTS", (x1 + 20, curr_y),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.46, (0, 220, 255), 1, cv.LINE_AA)
+
+        curr_y += 22
+        shortcuts = [
+            ("[Z] / [Ctrl+Z]  Undo", "[Y] / [Ctrl+Y]  Redo"),
+            ("[ [ / ] ]       Brush Size", "[B]            Toggle Background"),
+            ("[S] / [Ctrl+S]  Save & Export PNG", "[E]            Export Transparent PNG"),
+            ("[H]            Toggle Help", "[Q] / [ESC]    Quit AirDraw"),
+        ]
+        for col1, col2 in shortcuts:
+            cv.putText(frame, f" {col1:<30} {col2}", (x1 + 20, curr_y),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.40, (220, 220, 220), 1, cv.LINE_AA)
+            curr_y += 20
 
         return frame
     

@@ -266,3 +266,18 @@ def test_canvas_brush_size():
 
     line = list(canvas.lines.values())[0] if isinstance(canvas.lines, dict) else canvas.lines[0]
     assert line.thickness == 14
+
+
+def test_canvas_help_overlay():
+    canvas = Canvas(height=480, width=640)
+    assert canvas.show_help is False
+
+    canvas.toggle_help()
+    assert canvas.show_help is True
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    rendered = canvas.draw_canvas(frame, {'tracking': False})
+    assert rendered.shape == (480, 640, 3)
+
+    canvas.toggle_help()
+    assert canvas.show_help is False
