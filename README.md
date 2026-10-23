@@ -29,7 +29,7 @@
 - 🎨 **Compact Toolbar**: Pick from six colors and three drawing tools; the status bar shows the active gesture, tool, color, and brush size.
 - 🛡️ **Safer Clear**: Hold the `CLEAR` control for 25 consecutive frames to clear the canvas; the action can be undone.
 - ℹ️ **Interactive In-App Guide**: Press <kbd>h</kbd> or <kbd>?</kbd> at any time to display an on-screen gesture cheatsheet and keyboard reference card.
-- 🧪 **Comprehensive CI & Tests**: 35 automated pytest unit tests covering vector math, canvas state, collision detection, history, and persistence with GitHub Actions CI.
+- 🧪 **Comprehensive CI & Tests**: 38 automated pytest unit tests covering vector math, canvas state, collision detection, history, and persistence with GitHub Actions CI.
 
 ---
 
@@ -42,7 +42,7 @@ AirDraw uses hand landmark geometry to dynamically determine the current interac
 | **`HOVER`** | ☝️ **Index finger up** | Index extended, others curled | Moves cursor passively; hover over the top toolbar to choose a color or drawing tool |
 | **`DRAW`** | ✌️ **Index + Middle up** | Index and middle extended | Draws the active primitive (freehand stroke, circle, or rectangle) |
 | **`ERASE`** | ✊ **Fist / 3 fingers** | Closed fist or 3 fingers | Erases any stroke, circle, or square intersecting the yellow eraser radius |
-| **`TRANSLATE`**| 🖐️ **Open palm / horns** | All 5 fingers extended | Calculates hand displacement and moves existing drawings across the screen |
+| **`TRANSLATE`** | 🖐️ **Open palm / horns** | All 5 fingers OR index + pinky extended | Calculates hand displacement and moves existing drawings across the screen |
 | **`CLEAR`** | ⏱️ **Hold to confirm** | Index finger stays over `CLEAR` for 25 frames | Clears the canvas; Undo restores the artwork |
 
 ### 🎛️ Keyboard Shortcuts
