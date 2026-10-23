@@ -64,6 +64,15 @@ class Canvas():
         self.currSquare = Square((-1, -1), (-1, -1), self.color)
         self.currSquare.active = False
         self.blackout_background = False
+        self.clear_dwell_frames = 0
+        self.clear_dwell_threshold = 25  # ~0.8s hold to confirm clear
+        self.clear_hovering = False
+        self.status_message = ""
+        self.status_message_frames = 0
+
+    def set_status(self, msg: str, duration: int = 45):
+        self.status_message = msg
+        self.status_message_frames = duration
 
     def switch_background(self):
         self.blackout_background = not self.blackout_background
@@ -146,16 +155,32 @@ class Canvas():
         return coords
 
     def buttons_overlap(self, buttons_coords, fingertip_point):
+        if fingertip_point is None:
+            return False
         leftCoord, topCoord = buttons_coords[0]
         rightCoord, bottomCoord = buttons_coords[1]
 
-        r, c =  fingertip_point
+        r, c = fingertip_point
         return leftCoord <= c <= rightCoord and topCoord <= r <= bottomCoord
 
     def update_state(self, frame_shape, data = {}):
         """
-        This function should take in state updates from our hands, and update internal state of the game.
+        Takes in state updates from hands and updates internal canvas state.
+        Safely stops drawing when hand tracking is lost and protects against accidental actions.
         """
+        if not data or data.get('tracking') is False:
+            self.end_drawing()
+            self.clear_dwell_frames = 0
+            self.clear_hovering = False
+            return
+
+        gesture = data.get("gesture", Gesture.NONE)
+        if gesture == Gesture.NONE:
+            self.end_drawing()
+            self.clear_dwell_frames = 0
+            self.clear_hovering = False
+            return
+
         buttons_coord = self.get_buttons_coords(frame_shape)
         clear_button = buttons_coord[0]
         button_offset = 1
@@ -163,67 +188,73 @@ class Canvas():
         button_offset += len(self.colors)
         shape_buttons = buttons_coord[button_offset:button_offset+len(Shape)]
 
-        gesture = data.get("gesture", Gesture.HOVER)
+        # Deliberate interaction: only index finger pointing in HOVER mode activates UI buttons
+        cursor_coord = data.get('idx_fing_tip')
+        if gesture == Gesture.HOVER and cursor_coord is not None:
+            # Overlap with Clear All button (requires holding for dwell confirmation)
+            if self.buttons_overlap(clear_button[2:], cursor_coord):
+                self.clear_hovering = True
+                self.clear_dwell_frames += 1
+                if self.clear_dwell_frames >= self.clear_dwell_threshold:
+                    self.end_drawing()
+                    self.lines = {}
+                    self.circles = []
+                    self.squares = []
+                    self.clear_dwell_frames = 0
+                    self.clear_hovering = False
+                    self.set_status("Canvas Cleared")
+            else:
+                self.clear_dwell_frames = 0
+                self.clear_hovering = False
 
-        gesture_finger_points = [v for k, v in data.items() if k.endswith("_tip")]
-        # check if any of the active vector points overlap with our buttons coordinates
-
-        # overlap with clear button
-        for coord in gesture_finger_points:
-            if self.buttons_overlap(clear_button[2:], coord):
-                # Clear state.
-                self.end_drawing()
-                self.lines = {}
-                self.circles = []
-                self.squares = []
-                break
-        
-        # overlap with color button
-        for color_button_metadata in color_buttons:
-            button_color_str = color_button_metadata[0]
-            for coord in gesture_finger_points:
-                if self.buttons_overlap(color_button_metadata[2:], coord):
+            # Overlap with color buttons
+            for color_button_metadata in color_buttons:
+                button_color_str = color_button_metadata[0]
+                if self.buttons_overlap(color_button_metadata[2:], cursor_coord):
                     new_color = [color for color in self.colors if color.name == button_color_str][0]
-                    if gesture == Gesture.DRAW:
-                        self.end_drawing()
-                    # assign the color value to our metadata
                     self.color = new_color
+                    self.set_status(f"Color: {new_color.name}")
 
-        # overlap with shape button
-        for shape_button_metadata in shape_buttons:
-            shape_str = shape_button_metadata[0]
-            for coord in gesture_finger_points:
-                if self.buttons_overlap(shape_button_metadata[2:], coord):
+            # Overlap with shape buttons
+            for shape_button_metadata in shape_buttons:
+                shape_str = shape_button_metadata[0]
+                if self.buttons_overlap(shape_button_metadata[2:], cursor_coord):
                     new_shape = [shape for shape in self.shapes if shape.name == shape_str][0]
-                    if new_shape != self.shape and Gesture.DRAW:
-                        self.end_drawing()
                     self.shape = new_shape
+                    self.set_status(f"Shape: {new_shape.name}")
+        else:
+            self.clear_dwell_frames = 0
+            self.clear_hovering = False
 
-        if gesture == Gesture.DRAW:
-            midpoint_r, midpoint_c = data.get('origin')
-            radius = int(data.get('radius')) # varying sizes
+        # Execute gesture actions
+        origin = data.get('origin')
+        if gesture == Gesture.DRAW and origin is not None:
+            midpoint_r, midpoint_c = origin
 
             if self.shape == Shape.LINE:
                 self.push_point((midpoint_r, midpoint_c))
-            if self.shape == Shape.CIRCLE:
+            elif self.shape == Shape.CIRCLE:
                 self.update_circle((midpoint_r, midpoint_c))
-            if self.shape == Shape.SQUARE:
+            elif self.shape == Shape.SQUARE:
                 self.update_square((midpoint_r, midpoint_c))
 
         elif gesture == Gesture.HOVER:
             self.end_drawing()
-        elif gesture == Gesture.ERASE:
-            midpoint_r, midpoint_c = data.get('origin')
-            radius = int(data.get('radius'))
-            self.erase_mode((midpoint_r, midpoint_c), radius)
-        elif gesture == Gesture.TRANSLATE:
-            self.end_drawing()
 
-            midpoint_r, midpoint_c = data.get('origin')
-            radius = int(data.get('radius'))
-            shift = data.get('shift')
-            shift = int(shift[0]), int(shift[1])
-            self.translate_mode((midpoint_r, midpoint_c), radius, shift)
+        elif gesture == Gesture.ERASE and origin is not None:
+            self.end_drawing()
+            midpoint_r, midpoint_c = origin
+            radius = int(data.get('radius', 25))
+            self.erase_mode((midpoint_r, midpoint_c), radius)
+
+        elif gesture == Gesture.TRANSLATE and origin is not None:
+            self.end_drawing()
+            midpoint_r, midpoint_c = origin
+            radius = int(data.get('radius', 30))
+            shift = data.get('shift', (0, 0))
+            if shift is not None:
+                shift = int(shift[0]), int(shift[1])
+                self.translate_mode((midpoint_r, midpoint_c), radius, shift)
     
     def draw_canvas(self, frame, data):
         """
@@ -251,47 +282,65 @@ class Canvas():
             cv.putText(frame, button_str, 
                     (button_left + int((button_width)* .3), int(button_top + button_height * .5)), 
                     cv.FONT_HERSHEY_SIMPLEX, .5, Color.WHITE.value, 2, cv.LINE_AA)
-            # highlight selected color
-            if button_str == self.color.name or button_str == self.shape.name:
-                frame = cv.rectangle(frame, 
-                    (button_left, button_top),
-                    (button_right, button_bottom),
-                    Color.WHITE.value,
-                    2)
+            # Clear all dwell progress indicator
+            if button_str == "Clear all" and self.clear_hovering and self.clear_dwell_frames > 0:
+                progress = min(1.0, self.clear_dwell_frames / self.clear_dwell_threshold)
+                fill_w = int(button_width * progress)
+                cv.rectangle(frame,
+                             (button_left, button_bottom - 8),
+                             (button_left + fill_w, button_bottom),
+                             (0, 0, 255), -1)
+                cv.putText(frame, "HOLD TO CLEAR",
+                           (button_left + 5, button_bottom - 12),
+                           cv.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1, cv.LINE_AA)
 
-        gesture = data.get('gesture')
-        if gesture == Gesture.DRAW:
-            midpoint_r, midpoint_c = data['origin']
-            radius = data['radius'] 
+        # Draw tracking status or temporary status messages
+        if not data or data.get('tracking') is False:
+            cv.putText(frame, "TRACKING LOST - Bring hand into camera frame",
+                       (20, frame.shape[0] - 25),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv.LINE_AA)
+        elif self.status_message_frames > 0:
+            cv.putText(frame, self.status_message,
+                       (int(frame.shape[1] * 0.35), frame.shape[0] - 25),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv.LINE_AA)
+            self.status_message_frames -= 1
+
+        gesture = data.get('gesture') if data else Gesture.NONE
+        origin = data.get('origin') if data else None
+
+        if gesture == Gesture.DRAW and origin is not None:
+            midpoint_r, midpoint_c = origin
+            radius = data.get('radius', 10)
 
             img = frame.copy()
-            # purple cuz im royal
             cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.PURPLE.value, -1)
             alpha = 0.4
             frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
  
-        # draw the ring if we're in the eraser mode
-        if gesture == Gesture.ERASE:
-            # get middle finger and radius of circle to draw
-            midpoint_r, midpoint_c = data['origin']
-            radius = data['radius']
+        elif gesture == Gesture.ERASE and origin is not None:
+            midpoint_r, midpoint_c = origin
+            radius = data.get('radius', 25)
 
-            # put circle on the map, and add some opacity
             img = frame.copy()
             cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.YELLOW.value, -1)
             alpha = 0.4
             frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
 
-        elif gesture == Gesture.TRANSLATE:
-            midpoint_r, midpoint_c = data['origin']
-            radius = data['radius']
+        elif gesture == Gesture.TRANSLATE and origin is not None:
+            midpoint_r, midpoint_c = origin
+            radius = data.get('radius', 30)
 
-            # put circle on the map, and add some opacity
             img = frame.copy()
             cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.WHITE.value, -1)
             alpha = 0.4
             frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
-        
+
+        elif gesture == Gesture.HOVER and origin is not None:
+            # Subtle cursor indicator
+            cursor_r, cursor_c = origin
+            cv.circle(frame, (cursor_c, cursor_r), 6, self.color.value, -1)
+            cv.circle(frame, (cursor_c, cursor_r), 8, Color.WHITE.value, 1)
+
         frame = self.draw_lines(frame)
         frame = self.draw_circles(frame)
         frame = self.draw_squares(frame)

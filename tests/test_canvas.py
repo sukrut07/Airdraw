@@ -131,3 +131,71 @@ def test_translate_mode_no_crash():
 
     # Test shift that would push past canvas boundaries
     canvas.translate_mode((110, 120), radius=30, shift=(1000, 1000))
+
+
+def test_clear_dwell_protection():
+    canvas = Canvas(height=480, width=640)
+    canvas.push_point((100, 100))
+    canvas.end_drawing()
+    assert len(canvas.lines) == 1
+
+    # Clear button coordinates from get_buttons_coords
+    coords = canvas.get_buttons_coords((480, 640, 3))
+    clear_btn = coords[0]
+    # Center of clear button in (row, col) format
+    btn_r = (clear_btn[2][1] + clear_btn[3][1]) // 2
+    btn_c = (clear_btn[2][0] + clear_btn[3][0]) // 2
+
+    # Simulate 5 frames of hover over Clear All (less than 25 threshold)
+    hover_data = {
+        'tracking': True,
+        'gesture': Gesture.HOVER,
+        'idx_fing_tip': (btn_r, btn_c),
+        'origin': (btn_r, btn_c)
+    }
+    for _ in range(5):
+        canvas.update_state((480, 640, 3), hover_data)
+
+    # Artwork should NOT be cleared yet!
+    assert len(canvas.lines) == 1
+    assert canvas.clear_hovering is True
+    assert canvas.clear_dwell_frames == 5
+
+    # Move away from button
+    away_data = {
+        'tracking': True,
+        'gesture': Gesture.HOVER,
+        'idx_fing_tip': (300, 300),
+        'origin': (300, 300)
+    }
+    canvas.update_state((480, 640, 3), away_data)
+    assert canvas.clear_dwell_frames == 0
+    assert canvas.clear_hovering is False
+    assert len(canvas.lines) == 1
+
+    # Now hover for full dwell duration (25 frames)
+    for _ in range(25):
+        canvas.update_state((480, 640, 3), hover_data)
+
+    # Artwork should NOW be cleared
+    assert len(canvas.lines) == 0
+
+
+def test_missing_tracking_safety():
+    canvas = Canvas(height=480, width=640)
+    canvas.push_point((100, 100))
+    assert canvas.currLine.active is True
+
+    # Tracking lost
+    lost_data = {
+        'tracking': False,
+        'gesture': Gesture.NONE,
+        'origin': None
+    }
+    canvas.update_state((480, 640, 3), lost_data)
+    assert canvas.currLine.active is False
+
+    # Rendering during tracking loss should not crash
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    rendered = canvas.draw_canvas(frame, lost_data)
+    assert rendered is not None

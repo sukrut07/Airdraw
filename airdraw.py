@@ -19,23 +19,20 @@ def replay(fname):
         return
 
     detector = HandDetector()
-    while cap.isOpened() and (cv.waitKey(0) & 0xFF != ord('q')):
-        ret, img = cap.read()
-
-        # replay is completed when the video capture no longer has any frames to read.
-        if ret:
-
-            gesture_metadata = detector.get_gesture_metadata(img)
-
-            img = canvas.update_and_draw(img, gesture_metadata)
-            detector.draw_landmarks(img)
-
-            cv.imshow('Camera', img)
-        else:
-            break
-
-    cap.release()
-    cv.destroyAllWindows()
+    try:
+        while cap.isOpened() and (cv.waitKey(0) & 0xFF != ord('q')):
+            ret, img = cap.read()
+            if ret:
+                gesture_metadata = detector.get_gesture_metadata(img)
+                img = canvas.update_and_draw(img, gesture_metadata)
+                detector.draw_landmarks(img)
+                cv.imshow('Camera', img)
+            else:
+                break
+    finally:
+        cap.release()
+        detector.close()
+        cv.destroyAllWindows()
 
     print("replay complete", fname)
 
@@ -57,32 +54,32 @@ def main():
     print(f"Airdraw initialized ({width}x{height})")
     print("Controls: Press 'b' to toggle camera/black background, 'q' or ESC to quit")
     
-    # Keep looping
-    while True:
-        # Reading the frame from the camera
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            print("Warning: Failed to read frame from webcam.")
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                print("Warning: Failed to read frame from webcam.")
+                break
 
-        frame = cv.flip(frame, 1)
+            frame = cv.flip(frame, 1)
 
-        gesture_metadata = detector.get_gesture_metadata(frame)
+            gesture_metadata = detector.get_gesture_metadata(frame)
 
-        frame = canvas.update_and_draw(frame, gesture_metadata)
-        detector.draw_landmarks(frame)
-       
-        cv.imshow("Airdraw", frame)
-    
-        stroke = cv.waitKey(1) & 0xff  
-        if stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
-            canvas.switch_background()
+            frame = canvas.update_and_draw(frame, gesture_metadata)
+            detector.draw_landmarks(frame)
+           
+            cv.imshow("Airdraw", frame)
         
-        if stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
-            break
-    
-    cap.release()
-    cv.destroyAllWindows()
+            stroke = cv.waitKey(1) & 0xff  
+            if stroke == ord('b'): # press 'b' to switch backgrounds (camera/black)
+                canvas.switch_background()
+            
+            if stroke == ord('q') or stroke == 27: # press 'q' or 'esc' to quit
+                break
+    finally:
+        cap.release()
+        detector.close()
+        cv.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
