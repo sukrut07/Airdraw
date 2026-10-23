@@ -443,7 +443,7 @@ class Canvas:
         cv.rectangle(frame, (x1, y1), (x2, y2), (255, 180, 50), 2)
 
         # Card Title
-        cv.putText(frame, "AirDraw - Controls & Gesture Guide", (x1 + 20, y1 + 32),
+        cv.putText(frame, "AirDraw - Quick Controls Guide", (x1 + 20, y1 + 32),
                    cv.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv.LINE_AA)
         cv.putText(frame, "Press [H] or [ESC] to close", (x2 - 195, y1 + 30),
                    cv.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv.LINE_AA)
@@ -458,7 +458,7 @@ class Canvas:
             ("2 Fingers (Index+Mid)", "Draw Strokes & Shapes"),
             ("3 Fingers / Fist", "Erase elements near cursor"),
             ("Open Palm / Horns", "Translate & Move Artwork"),
-            ("Hold on 'Clear all'", "Dwell timer (~0.8s) confirms wipe"),
+            ("Hold on CLEAR", "25-frame hold clears canvas (Undo)"),
         ]
         curr_y = y1 + 92
         for gesture_title, gesture_desc in gestures:
