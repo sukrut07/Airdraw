@@ -58,7 +58,7 @@ class Canvas():
         self.rows = height
         self.columns = width
 
-        self.colors = [ Color.BLUE, Color.GREEN, Color.RED ]
+        self.colors = [ Color.BLUE, Color.GREEN, Color.RED, Color.YELLOW, Color.PURPLE, Color.WHITE ]
         self.shapes = [ Shape.LINE, Shape.CIRCLE, Shape.SQUARE ]
         self.color = Color.BLUE # only really used to initialize lines
         self.shape = Shape.LINE
@@ -322,8 +322,16 @@ class Canvas():
             button_height = button_bottom - button_top
 
             cv.putText(frame, button_str, 
-                    (button_left + int((button_width)* .3), int(button_top + button_height * .5)), 
-                    cv.FONT_HERSHEY_SIMPLEX, .5, Color.WHITE.value, 2, cv.LINE_AA)
+                    (button_left + int((button_width)* .25), int(button_top + button_height * .55)), 
+                    cv.FONT_HERSHEY_SIMPLEX, .45, Color.WHITE.value, 1, cv.LINE_AA)
+
+            # Highlight selected color or shape
+            if button_str == self.color.name or button_str == self.shape.name:
+                cv.rectangle(frame,
+                             (button_left, button_top),
+                             (button_right, button_bottom),
+                             (255, 255, 255), 2)
+
             # Clear all dwell progress indicator
             if button_str == "Clear all" and self.clear_hovering and self.clear_dwell_frames > 0:
                 progress = min(1.0, self.clear_dwell_frames / self.clear_dwell_threshold)
@@ -336,56 +344,76 @@ class Canvas():
                            (button_left + 5, button_bottom - 12),
                            cv.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1, cv.LINE_AA)
 
-        # Draw tracking status or temporary status messages
-        if not data or data.get('tracking') is False:
-            cv.putText(frame, "TRACKING LOST - Bring hand into camera frame",
-                       (20, frame.shape[0] - 25),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv.LINE_AA)
-        elif self.status_message_frames > 0:
-            cv.putText(frame, self.status_message,
-                       (int(frame.shape[1] * 0.35), frame.shape[0] - 25),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv.LINE_AA)
-            self.status_message_frames -= 1
-
-        gesture = data.get('gesture') if data else Gesture.NONE
-        origin = data.get('origin') if data else None
-
-        if gesture == Gesture.DRAW and origin is not None:
-            midpoint_r, midpoint_c = origin
-            radius = data.get('radius', 10)
-
-            img = frame.copy()
-            cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.PURPLE.value, -1)
-            alpha = 0.4
-            frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
- 
-        elif gesture == Gesture.ERASE and origin is not None:
-            midpoint_r, midpoint_c = origin
-            radius = data.get('radius', 25)
-
-            img = frame.copy()
-            cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.YELLOW.value, -1)
-            alpha = 0.4
-            frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
-
-        elif gesture == Gesture.TRANSLATE and origin is not None:
-            midpoint_r, midpoint_c = origin
-            radius = data.get('radius', 30)
-
-            img = frame.copy()
-            cv.circle(img, (midpoint_c, midpoint_r), int(radius), Color.WHITE.value, -1)
-            alpha = 0.4
-            frame = cv.addWeighted(frame, alpha, img, 1-alpha, 0)
-
-        elif gesture == Gesture.HOVER and origin is not None:
-            # Subtle cursor indicator
-            cursor_r, cursor_c = origin
-            cv.circle(frame, (cursor_c, cursor_r), 6, self.color.value, -1)
-            cv.circle(frame, (cursor_c, cursor_r), 8, Color.WHITE.value, 1)
-
+        # Draw drawing primitives
         frame = self.draw_lines(frame)
         frame = self.draw_circles(frame)
         frame = self.draw_squares(frame)
+
+        tracking = data.get('tracking', False) if data else False
+        gesture = data.get('gesture') if data else Gesture.NONE
+        origin = data.get('origin') if data else None
+
+        # Interactive Cursor System
+        if tracking and origin is not None:
+            c_r, c_c = origin
+            if gesture == Gesture.HOVER:
+                # Hover / Cursor pointing mode: precise target ring and dot
+                cv.circle(frame, (c_c, c_r), 6, self.color.value, -1)
+                cv.circle(frame, (c_c, c_r), 9, (255, 255, 255), 1)
+                cv.putText(frame, "CURSOR", (c_c + 14, c_r - 6), cv.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1, cv.LINE_AA)
+
+            elif gesture == Gesture.DRAW:
+                # Drawing mode: pulsing brush radius preview
+                radius = data.get('radius', 10)
+                img = frame.copy()
+                cv.circle(img, (c_c, c_r), int(radius), self.color.value, -1)
+                frame = cv.addWeighted(frame, 0.65, img, 0.35, 0)
+                cv.circle(frame, (c_c, c_r), max(2, self.brush_size // 2), (255, 255, 255), -1)
+                cv.putText(frame, f"DRAW ({self.brush_size}px)", (c_c + 14, c_r - 6), cv.FONT_HERSHEY_SIMPLEX, 0.4, self.color.value, 1, cv.LINE_AA)
+
+            elif gesture == Gesture.ERASE:
+                # Erase mode: yellow translucent boundary
+                radius = data.get('radius', 25)
+                img = frame.copy()
+                cv.circle(img, (c_c, c_r), int(radius), Color.YELLOW.value, -1)
+                frame = cv.addWeighted(frame, 0.65, img, 0.35, 0)
+                cv.circle(frame, (c_c, c_r), int(radius), Color.YELLOW.value, 2)
+                cv.putText(frame, "ERASE", (c_c + 14, c_r - 6), cv.FONT_HERSHEY_SIMPLEX, 0.4, Color.YELLOW.value, 1, cv.LINE_AA)
+
+            elif gesture == Gesture.TRANSLATE:
+                # Translate mode: white grab ring
+                radius = data.get('radius', 30)
+                img = frame.copy()
+                cv.circle(img, (c_c, c_r), int(radius), Color.WHITE.value, -1)
+                frame = cv.addWeighted(frame, 0.65, img, 0.35, 0)
+                cv.circle(frame, (c_c, c_r), int(radius), Color.WHITE.value, 2)
+                cv.putText(frame, "MOVE", (c_c + 14, c_r - 6), cv.FONT_HERSHEY_SIMPLEX, 0.4, Color.WHITE.value, 1, cv.LINE_AA)
+
+        # Bottom HUD Status Bar (semi-transparent dark pill)
+        hud_height = 36
+        hud_y = frame.shape[0] - hud_height
+        hud_overlay = frame.copy()
+        cv.rectangle(hud_overlay, (0, hud_y), (frame.shape[1], frame.shape[0]), (25, 25, 25), -1)
+        frame = cv.addWeighted(frame, 0.30, hud_overlay, 0.70, 0)
+        cv.line(frame, (0, hud_y), (frame.shape[1], hud_y), (60, 60, 60), 1)
+
+        if not tracking:
+            status_text = "MODE: LOST | Bring hand into view to draw"
+            text_color = (0, 0, 255)
+        elif self.status_message_frames > 0:
+            status_text = f"ACTION: {self.status_message}"
+            text_color = (0, 255, 255)
+            self.status_message_frames -= 1
+        else:
+            status_text = f"MODE: {gesture.value} | TOOL: {self.shape.name} | COLOR: {self.color.name} | BRUSH: {self.brush_size}px"
+            text_color = (240, 240, 240)
+
+        cv.putText(frame, status_text, (15, frame.shape[0] - 12),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.48, text_color, 1, cv.LINE_AA)
+
+        undo_status = f"UNDO: {'YES' if self.can_undo else 'NO'} | REDO: {'YES' if self.can_redo else 'NO'}"
+        cv.putText(frame, undo_status, (max(15, frame.shape[1] - 230), frame.shape[0] - 12),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.45, (170, 170, 170), 1, cv.LINE_AA)
 
         return frame
     
