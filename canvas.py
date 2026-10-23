@@ -180,7 +180,6 @@ class Canvas:
             self.end_drawing()
             self.clear_dwell_frames = 0
             self.clear_hovering = False
-            self.clear_dwell_frames = 0
             self._clear_latched = False
             return
 
@@ -189,7 +188,7 @@ class Canvas:
             self.end_drawing()
             self.clear_dwell_frames = 0
             self.clear_hovering = False
-            self._last_hover_target = None
+            self._clear_latched = False
             return
 
         buttons_coord = self.get_buttons_coords(frame_shape)
@@ -216,7 +215,7 @@ class Canvas:
                         self.squares = []
                         self.clear_dwell_frames = self.clear_dwell_threshold
                         self._clear_latched = True
-                        self.set_status("Canvas cleared — Undo available")
+                        self.set_status("Canvas cleared - Undo available")
             else:
                 self.clear_dwell_frames = 0
                 self.clear_hovering = False
@@ -247,7 +246,6 @@ class Canvas:
         else:
             self.clear_dwell_frames = 0
             self.clear_hovering = False
-            self._last_hover_target = None
 
         # Execute gesture actions
         origin = data.get('origin')
@@ -303,7 +301,8 @@ class Canvas:
             # Match contrast to the color swatch for easy reading.
             if button_name in Color.__members__:
                 color = Color[button_name]
-                brightness = sum(color.value) / 3
+                blue, green, red = color.value
+                brightness = 0.114 * blue + 0.587 * green + 0.299 * red
                 text_color = (25, 25, 25) if brightness > 175 else (250, 250, 250)
                 selected = self.color.name == button_name
                 if selected:
@@ -392,7 +391,7 @@ class Canvas:
         cv.line(frame, (0, hud_y), (frame_width - 1, hud_y), (70, 70, 78), 1)
 
         if not tracking:
-            status_text = "No hand detected — move your hand into view"
+            status_text = "No hand detected - move your hand into view"
             text_color = (90, 90, 255)
         elif self.status_message_frames > 0:
             status_text = self.status_message
