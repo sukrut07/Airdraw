@@ -246,6 +246,7 @@ class Canvas:
         else:
             self.clear_dwell_frames = 0
             self.clear_hovering = False
+            self._clear_latched = False
 
         # Execute gesture actions
         origin = data.get('origin')
@@ -308,7 +309,7 @@ class Canvas:
                 color = Color[button_name]
                 blue, green, red = color.value
                 brightness = 0.114 * blue + 0.587 * green + 0.299 * red
-                text_color = (25, 25, 25) if brightness > 175 else (250, 250, 250)
+                text_color = (25, 25, 25) if brightness > 130 else (250, 250, 250)
                 selected = self.color.name == button_name
                 if selected:
                     cv.rectangle(frame, (x1 + 1, y1 + 1), (x2 - 1, y2 - 1), (255, 255, 255), 2)
