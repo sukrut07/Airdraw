@@ -18,9 +18,9 @@ Simply run the included launcher script, which automatically selects Python 3.11
 
 #### 🍎 macOS & 🐧 Linux
 
-1. **Open your terminal** and navigate to the project root:
+1. **Open your terminal** and navigate to the project directory:
    ```bash
-   cd "/Users/sukrutdusane/Documents/Projects /Sy/airdraw-main"
+   cd Airdraw
    ```
 
 2. **Create a virtual environment with Python 3.11** *(recommended for MediaPipe)*:
@@ -40,7 +40,12 @@ Simply run the included launcher script, which automatically selects Python 3.11
    pip install -r requirements.txt
    ```
 
-5. **Run AirDraw**:
+5. **Run the automated test suite**:
+   ```bash
+   pytest
+   ```
+
+6. **Run AirDraw**:
    ```bash
    python airdraw.py
    ```
@@ -61,18 +66,33 @@ Simply run the included launcher script, which automatically selects Python 3.11
    pip install -r requirements.txt
    ```
 
-3. **Run AirDraw**:
+3. **Run the test suite**:
+   ```cmd
+   pytest
+   ```
+
+4. **Run AirDraw**:
    ```cmd
    python airdraw.py
    ```
 
 ---
 
-### 🎮 In-App Controls & Gestures
+### 🎮 In-App Gestures & Keyboard Controls
 
-- **Draw**: Raise your **index finger** only.
-- **Hover / Select**: Raise **index + middle fingers**. Hover over top buttons to pick color or shape, or click *Clear All*.
-- **Erase**: Form a **closed fist** over drawings you want to wipe.
-- **Translate**: Open your **whole hand** (5 fingers) to move shapes around.
-- **Background Switch**: Press <kbd>b</kbd> to toggle between your live camera view and a solid black canvas.
-- **Quit**: Press <kbd>q</kbd> or <kbd>ESC</kbd>.
+#### 🖐️ Hand Gestures
+- **Hover / Select**: Raise your **index finger** only. Move cursor over top buttons to pick color or shape.
+- **Draw**: Raise **index + middle fingers** together. Move to draw strokes, circles, or rectangles.
+- **Erase**: Form a **closed fist** or raise **3 fingers** to wipe drawings within the yellow eraser radius.
+- **Translate**: Open your **whole hand** (5 fingers) or form horns to grab and move existing artwork.
+- **Safe Clear All**: Hover your index finger over *Clear all* and hold for ~0.8s (a progress bar fills) to confirm wipe.
+
+#### ⌨️ Keyboard Shortcuts
+- <kbd>h</kbd> or <kbd>?</kbd>: Toggle interactive in-app help card & gesture guide
+- <kbd>b</kbd>: Toggle canvas background between **Live Camera** and **Dark Whiteboard**
+- <kbd>z</kbd> / <kbd>Ctrl+Z</kbd>: Undo last drawing action
+- <kbd>y</kbd> / <kbd>Ctrl+Y</kbd>: Redo undone action
+- <kbd>[</kbd> / <kbd>]</kbd>: Decrease / increase brush size
+- <kbd>s</kbd> / <kbd>Ctrl+S</kbd>: Save editable JSON project and export clean PNG image
+- <kbd>e</kbd>: Export transparent PNG (artwork only, no background)
+- <kbd>q</kbd> / <kbd>ESC</kbd>: Quit AirDraw (or close help overlay if open)

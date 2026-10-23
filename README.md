@@ -22,34 +22,41 @@
 
 ### 🌟 Core Highlights
 
-- 🖐️ **Zero-Hardware Touchless Input**: Operates on any standard webcam at real-time frame rates.
-- 📐 **Vector-Based Gesture Engine**: Classifies gestures via high-speed trigonometric angles and dot products instead of slow neural inference.
-- 🖌️ **Multiple Geometric Primitives**: Freehand drawing, smooth circles, and axis-aligned squares.
-- 🎨 **Floating Virtual HUD**: Interactive on-screen buttons for color picking and shape toggling.
-- 🧼 **Spatial Collision Eraser**: Proximity-based collision detection wipes drawings within a customizable radius.
-- ✋ **Interactive Translation**: Grab and drag drawn objects across the canvas using open-palm tracking.
-- 🌌 **Dual Canvas Modes**: Instant toggle between real-time camera passthrough and a clean blackout blackboard.
-- 📈 **Temporal RingBuffer Smoothing**: Multi-frame landmark averaging eliminates micro-jitter and delivers smooth strokes.
+- 🖐️ **Zero-Hardware Touchless Input**: Operates on any standard webcam at real-time 30+ FPS.
+- 📐 **Vector-Based Gesture Engine**: Classifies gestures via high-speed trigonometric dot products with 2-frame temporal hysteresis.
+- ↩️ **Command-Pattern Undo/Redo**: Full drawing history engine supporting undo and redo across strokes, circles, squares, erasing, and canvas clears.
+- 💾 **Project Persistence & Export**: Save editable drawings to versioned JSON (`projects/`) and export high-res clean PNGs or transparent background PNGs (`exports/`).
+- 🎨 **Floating Virtual HUD & Cursor**: Interactive multi-state cursor (`CURSOR`, `DRAW`, `ERASE`, `MOVE`) with 6 vibrant colors and a bottom telemetry status bar.
+- 🛡️ **Accidental Clear Protection**: Hold-to-confirm dwell countdown (~0.8s hold with visual progress bar) prevents accidental canvas wipes; full wipe is reversible via Undo.
+- ℹ️ **Interactive In-App Guide**: Press <kbd>h</kbd> or <kbd>?</kbd> at any time to display an on-screen gesture cheatsheet and keyboard reference card.
+- 🧪 **Comprehensive CI & Tests**: 35 automated pytest unit tests covering vector math, canvas state, collision detection, history, and persistence with GitHub Actions CI.
 
 ---
 
 ## 🖐️ Gesture & Control System
 
-AirDraw uses hand landmark geometry to dynamically determine current interaction mode:
+AirDraw uses hand landmark geometry to dynamically determine the current interaction mode:
 
 | Mode | Hand Pose | Trigger Condition | Functionality |
 | :--- | :--- | :--- | :--- |
-| **`DRAW`** | ☝️ **Index finger up** | Index extended, others curled | Draws the active primitive (freehand stroke, circle, or rectangle) |
-| **`HOVER`** | ✌️ **Index + Middle fingers up** | Index and middle extended | Moves cursor passively across the HUD to select colors, shapes, or hit **Clear All** |
-| **`ERASE`** | ✊ **Closed fist** | All fingers closed into palm | Erases any stroke, circle, or square intersecting the eraser contact zone |
-| **`TRANSLATE`** | 🖐️ **Full open palm** | All 5 fingers extended | Calculates hand displacement and moves existing drawings across the screen |
+| **`HOVER`** | ☝️ **Index finger up** | Index extended, others curled | Moves cursor passively; hover over top buttons to pick color, shape, or trigger actions |
+| **`DRAW`** | ✌️ **Index + Middle up** | Index and middle extended | Draws the active primitive (freehand stroke, circle, or rectangle) |
+| **`ERASE`** | ✊ **Fist / 3 fingers** | Closed fist or 3 fingers | Erases any stroke, circle, or square intersecting the yellow eraser radius |
+| **`TRANSLATE`**| 🖐️ **Open palm / horns** | All 5 fingers extended | Calculates hand displacement and moves existing drawings across the screen |
+| **`CLEAR ALL`** | ⏱️ **Hold on button** | Index finger on *Clear all* | 25-frame dwell timer confirms wipe with a visual progress bar (undoable!) |
 
 ### 🎛️ Keyboard Shortcuts
 
 | Shortcut | Description |
 | :--- | :--- |
-| <kbd>b</kbd> | Toggle canvas background between **Live Camera Stream** and **Blackout Canvas** |
-| <kbd>q</kbd> or <kbd>ESC</kbd> | Safely terminate the application loop and close OpenCV windows |
+| <kbd>h</kbd> or <kbd>?</kbd> | Toggle **Interactive In-App Help Overlay** & gesture guide |
+| <kbd>b</kbd> | Toggle canvas background between **Live Camera Stream** and **Dark Whiteboard** |
+| <kbd>z</kbd> or <kbd>Ctrl+Z</kbd> | **Undo** the last completed drawing, erasing, or clear action |
+| <kbd>y</kbd> or <kbd>Ctrl+Y</kbd> | **Redo** the last undone action |
+| <kbd>[</kbd> / <kbd>]</kbd> | Decrease / increase active brush thickness (1px to 30px) |
+| <kbd>s</kbd> or <kbd>Ctrl+S</kbd> | **Save Project** (JSON) and **Export Clean PNG** (artwork only, no webcam feed) |
+| <kbd>e</kbd> | **Export Transparent PNG** (alpha channel drawing export) |
+| <kbd>q</kbd> or <kbd>ESC</kbd> | Close help card if open, or terminate the application loop cleanly |
 
 ---
 
@@ -60,15 +67,16 @@ flowchart LR
     A[Webcam Feed] --> B[Horizontal Flip]
     B --> C[MediaPipe Hands Solution]
     C --> D[21 Landmark Extraction]
-    D --> E[RingBuffer Temporal Filter]
+    D --> E[RingBuffer Landmark Smoothing]
     E --> F[Vector Math & Dot Products]
-    F --> G{Gesture Classifier}
-    G -->|Index Only| H[DRAW Mode]
-    G -->|Index + Middle| I[HOVER Mode / HUD]
-    G -->|Closed Fist| J[ERASE Mode]
+    F --> G{Hysteresis Gesture Classifier}
+    G -->|Index Only| H[HOVER / Cursor Mode]
+    G -->|Index + Middle| I[DRAW Mode]
+    G -->|Fist / 3 Fingers| J[ERASE Mode]
     G -->|Open Palm| K[TRANSLATE Mode]
-    H & I & J & K --> L[Canvas Compositor]
-    L --> M[Interactive Display Window]
+    H & I & J & K --> L[DrawingHistory & Canvas State]
+    L --> M[Export / JSON Persistence]
+    L --> N[Compositor & Display Window]
 ```
 
 ---
@@ -150,17 +158,42 @@ where $P_{i,k}$ represents the 3D position of landmark $i$ at frame $k$.
 
 ```
 Airdraw/
-├── airdraw.py          # Main application loop, camera capture & event dispatcher
-├── canvas.py           # Virtual canvas state manager, HUD buttons & rendering logic
-├── hands.py            # MediaPipe wrapper, LandmarkBuffer & gesture recognition
-├── util.py             # Geometric math, dot products, and vector operations
+├── .github/workflows/  # CI pipeline (Python 3.10 & 3.11 test matrix)
+├── airdraw.py          # Application loop, camera lifecycle & event dispatcher
+├── canvas.py           # Canvas state manager, interactive HUD, shapes & renderer
+├── hands.py            # MediaPipe wrapper, LandmarkBuffer & gesture classifier
+├── history.py          # Command-pattern Undo/Redo drawing history engine
+├── persistence.py      # JSON project serialization & clean PNG/transparent PNG exporter
+├── util.py             # Geometric math, vector operations & Euclidean distance
+├── tests/              # Automated unit test suite (35 pytest test cases)
 ├── data.py             # Dataset capture and replay utility
-├── run.sh              # One-command automated execution script
-├── requirements.txt    # Project dependencies
-├── HOW_TO_RUN.md       # Terminal guide for running on macOS, Linux, and Windows
+├── run.sh              # One-command automated launch script
+├── requirements.txt    # Project dependencies & constraints
+├── HOW_TO_RUN.md       # Step-by-step setup guide for macOS, Linux, and Windows
 ├── LICENSE.md          # Mozilla Public License 2.0
-└── README.md           # Project documentation
+└── README.md           # Project documentation & reference
 ```
+
+---
+
+## 🧪 Automated Testing & CI
+
+AirDraw includes a comprehensive unit test suite built with `pytest`:
+
+```bash
+# Run all tests
+pytest -v
+
+# Run with coverage report
+pytest --tb=short
+```
+
+Tests cover:
+- **`tests/test_canvas.py`**: Shape geometry, coordinate boundary clamping, brush thickness, clear dwell confirmation, and help overlay.
+- **`tests/test_gestures.py`**: Hand pose detection, temporal hysteresis transitions, and tracking-loss buffer resets.
+- **`tests/test_history.py`**: Command pattern actions, single and multi-step undo/redo, branch invalidation, and clear reversals.
+- **`tests/test_persistence.py`**: JSON project serialization, loading, and clean/transparent PNG export.
+- **`tests/test_util.py`**: Vector Euclidean distance, dot products, vector normalization, and 2D bounds clamping.
 
 ---
 
